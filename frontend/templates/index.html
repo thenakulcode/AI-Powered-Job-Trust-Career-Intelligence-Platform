@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sentinel &mdash; AI Job Fraud Detection</title>
+  <meta name="description" content="Analyze job descriptions, URLs, and recruitment messages using AI to detect potentially fraudulent job postings." />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+
+  <link rel="stylesheet" href="../static/css/style.css" />
+</head>
+<body data-theme="dark">
+
+  <!-- Scanline / grid ambience -->
+  <div class="bg-grid" aria-hidden="true"></div>
+  <div class="bg-glow bg-glow--one" aria-hidden="true"></div>
+  <div class="bg-glow bg-glow--two" aria-hidden="true"></div>
+  <div class="bg-glow bg-glow--three" aria-hidden="true"></div>
+
+  <div class="app-shell">
+
+    <!-- ============ TOP NAV ============ -->
+    <nav class="topnav">
+      <div class="topnav__brand">
+        <span class="topnav__mark"><i class="fa-solid fa-shield-halved"></i></span>
+        <span class="topnav__name">SENTINEL<span class="topnav__name-accent">.AI</span></span>
+      </div>
+      <div class="topnav__actions">
+        <span class="status-pill" id="apiStatusPill" title="Backend connection status">
+          <span class="status-pill__dot" id="apiStatusDot"></span>
+          <span id="apiStatusText">Checking backend&hellip;</span>
+        </span>
+        <button class="icon-btn" id="themeToggle" type="button" aria-label="Toggle light and dark theme">
+          <i class="fa-solid fa-moon" id="themeIcon"></i>
+        </button>
+      </div>
+    </nav>
+
+    <!-- ============ HERO ============ -->
+    <header class="hero">
+      <div class="hero__card">
+        <div class="hero__eyebrow"><i class="fa-solid fa-radar"></i> Real-time fraud intelligence</div>
+        <h1 class="hero__title">AI&#8209;Powered Fake Job Detection</h1>
+        <p class="hero__subtitle" id="heroSubtitle"></p>
+        <div class="hero__meta">
+          <div class="hero__meta-item">
+            <i class="fa-solid fa-microchip"></i> XGBoost + TF&#8209;IDF engine
+          </div>
+          <div class="hero__meta-item">
+            <i class="fa-solid fa-bolt"></i> Sub-second scoring
+          </div>
+          <div class="hero__meta-item">
+            <i class="fa-solid fa-lock"></i> Nothing leaves your browser except the scan
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- ============ STATISTICS ROW ============ -->
+    <section class="stats-row" aria-label="Scan statistics">
+      <div class="stat-card">
+        <div class="stat-card__icon stat-card__icon--blue"><i class="fa-solid fa-magnifying-glass-chart"></i></div>
+        <div class="stat-card__body">
+          <span class="stat-card__value" id="statTotal">0</span>
+          <span class="stat-card__label">Total Scans</span>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card__icon stat-card__icon--red"><i class="fa-solid fa-triangle-exclamation"></i></div>
+        <div class="stat-card__body">
+          <span class="stat-card__value" id="statFake">0</span>
+          <span class="stat-card__label">Fake Jobs Detected</span>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card__icon stat-card__icon--green"><i class="fa-solid fa-circle-check"></i></div>
+        <div class="stat-card__body">
+          <span class="stat-card__value" id="statReal">0</span>
+          <span class="stat-card__label">Real Jobs</span>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card__icon stat-card__icon--cyan"><i class="fa-solid fa-crosshairs"></i></div>
+        <div class="stat-card__body">
+          <span class="stat-card__value" id="statAccuracy">98.66%</span>
+          <span class="stat-card__label">Detection Accuracy</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ MAIN LAYOUT ============ -->
+    <main class="main-grid">
+
+      <!-- ---------- LEFT: DETECTION CARD ---------- -->
+      <section class="panel detection-panel">
+        <div class="panel__header">
+          <h2><i class="fa-solid fa-satellite-dish"></i> Threat Scanner</h2>
+          <span class="panel__hint">Paste a posting to analyze</span>
+        </div>
+
+        <div class="tabs" role="tablist" aria-label="Input source">
+          <button class="tab tab--active" id="tabWebsite" role="tab" aria-selected="true" type="button">
+            <i class="fa-solid fa-link"></i> Website / Link
+          </button>
+          <button class="tab" id="tabEmail" role="tab" aria-selected="false" type="button">
+            <i class="fa-solid fa-envelope"></i> Email / Text
+          </button>
+        </div>
+
+        <form id="scanForm" novalidate>
+          <div class="field-group" id="urlFieldGroup">
+            <label class="field-label" for="jobUrl">Job URL</label>
+            <div class="input-wrap">
+              <i class="fa-solid fa-globe input-wrap__icon"></i>
+              <input type="text" id="jobUrl" class="text-input" placeholder="https://linkedin.com/jobs/..." autocomplete="off" />
+            </div>
+            <span class="field-error" id="urlError"></span>
+          </div>
+
+          <div class="field-group">
+            <div class="field-label-row">
+              <label class="field-label" for="jobDescription">Job Description</label>
+              <span class="char-counter" id="charCounter">0 characters</span>
+            </div>
+            <textarea
+              id="jobDescription"
+              class="textarea-input"
+              placeholder="Paste the complete job description..."
+              rows="9"
+            ></textarea>
+            <span class="field-error" id="descError"></span>
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn-scan" id="scanBtn">
+              <span class="btn-scan__content">
+                <i class="fa-solid fa-shield-virus"></i>
+                <span id="scanBtnLabel">Scan for Threats</span>
+                <i class="fa-solid fa-arrow-right btn-scan__arrow"></i>
+              </span>
+              <span class="btn-scan__spinner" id="scanSpinner" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="btn-ghost" id="clearBtn">
+              <i class="fa-solid fa-eraser"></i> Clear
+            </button>
+          </div>
+        </form>
+
+        <!-- ---------- RESULT CARD ---------- -->
+        <div class="result-card" id="resultCard" hidden>
+          <div class="result-card__top">
+            <div class="verdict" id="verdictBadge">
+              <i class="fa-solid fa-circle-check" id="verdictIcon"></i>
+              <span id="verdictText">Real Job</span>
+            </div>
+            <div class="result-actions">
+              <button class="icon-btn icon-btn--small" id="copyResultBtn" title="Copy result"><i class="fa-regular fa-copy"></i></button>
+              <button class="icon-btn icon-btn--small" id="exportPdfBtn" title="Export as PDF"><i class="fa-solid fa-file-arrow-down"></i></button>
+            </div>
+          </div>
+
+          <div class="result-card__body">
+            <div class="gauge-wrap">
+              <svg viewBox="0 0 200 120" class="gauge" id="riskGauge">
+                <path class="gauge__track" d="M20,110 A90,90 0 0 1 180,110" />
+                <path class="gauge__fill" id="gaugeFill" d="M20,110 A90,90 0 0 1 180,110" />
+              </svg>
+              <div class="gauge__readout">
+                <span class="gauge__value" id="gaugeValue">0%</span>
+                <span class="gauge__label">Fraud Risk</span>
+              </div>
+            </div>
+
+            <div class="result-metrics">
+              <div class="metric-row">
+                <span class="metric-row__label">Confidence Score</span>
+                <span class="metric-row__value" id="confidenceValue">0%</span>
+              </div>
+              <div class="progress-track">
+                <div class="progress-fill" id="confidenceFill"></div>
+              </div>
+
+              <div class="metric-grid">
+                <div class="metric-tile">
+                  <span class="metric-tile__label">Probability</span>
+                  <span class="metric-tile__value" id="probabilityValue">&mdash;</span>
+                </div>
+                <div class="metric-tile">
+                  <span class="metric-tile__label">Threat Level</span>
+                  <span class="metric-tile__value" id="threatLevelValue">&mdash;</span>
+                </div>
+                <div class="metric-tile">
+                  <span class="metric-tile__label">Scan Time</span>
+                  <span class="metric-tile__value" id="scanTimeValue">&mdash;</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="threat-indicators" id="threatIndicators">
+            <h3 class="threat-indicators__title"><i class="fa-solid fa-list-check"></i> Threat Indicators</h3>
+            <div class="indicator-grid" id="indicatorGrid"></div>
+          </div>
+
+          <div class="risk-factors" id="riskFactorsBlock">
+            <h3 class="risk-factors__title"><i class="fa-solid fa-magnifying-glass"></i> Model Signals</h3>
+            <ul class="risk-factors__list" id="riskFactorsList"></ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---------- RIGHT: INFO PANEL ---------- -->
+      <aside class="side-column">
+
+        <section class="panel info-panel">
+          <div class="panel__header">
+            <h2><i class="fa-solid fa-diagram-project"></i> How It Works</h2>
+          </div>
+          <ol class="steps-list">
+            <li class="steps-list__item">
+              <span class="steps-list__num">1</span>
+              <div>
+                <strong>Clean Input Text</strong>
+                <p>Strip HTML, URLs and noise, then normalize casing and whitespace.</p>
+              </div>
+            </li>
+            <li class="steps-list__item">
+              <span class="steps-list__num">2</span>
+              <div>
+                <strong>TF&#8209;IDF Feature Extraction</strong>
+                <p>Convert the cleaned text into weighted term-frequency vectors.</p>
+              </div>
+            </li>
+            <li class="steps-list__item">
+              <span class="steps-list__num">3</span>
+              <div>
+                <strong>XGBoost Prediction</strong>
+                <p>The trained gradient-boosted model scores the feature vector.</p>
+              </div>
+            </li>
+            <li class="steps-list__item">
+              <span class="steps-list__num">4</span>
+              <div>
+                <strong>Confidence Calculation</strong>
+                <p>Class probabilities are converted into a risk score and verdict.</p>
+              </div>
+            </li>
+          </ol>
+
+          <div class="info-box">
+            <i class="fa-solid fa-circle-info"></i>
+            <p>Confidence represents the probability estimated by the trained XGBoost model, not a guarantee of outcome.</p>
+          </div>
+        </section>
+
+        <section class="panel history-panel">
+          <div class="panel__header">
+            <h2><i class="fa-solid fa-clock-rotate-left"></i> Recent Scans</h2>
+            <button class="text-btn" id="clearHistoryBtn" type="button">Clear</button>
+          </div>
+          <div class="history-list" id="historyList">
+            <p class="empty-state" id="historyEmpty">No scans yet. Run your first analysis to see it here.</p>
+          </div>
+        </section>
+
+      </aside>
+    </main>
+
+    <footer class="app-footer">
+      <span>Sentinel.AI &mdash; local inference, no data stored server-side.</span>
+    </footer>
+  </div>
+
+  <!-- Toast container -->
+  <div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+  <script src="../static/js/script.js" defer></script>
+</body>
+</html>
