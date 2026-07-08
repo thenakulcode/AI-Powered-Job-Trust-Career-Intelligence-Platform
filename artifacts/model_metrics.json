@@ -1,0 +1,404 @@
+{
+  "Before SMOTE - Logistic Regression": {
+    "scenario": "Before SMOTE",
+    "accuracy": 0.9700782997762863,
+    "precision": 0.6375,
+    "recall": 0.884393063583815,
+    "f1": 0.7409200968523002,
+    "roc_auc": 0.9802894080197853,
+    "train_accuracy": 0.9743428411633109,
+    "train_precision": 0.6546489563567363,
+    "train_recall": 0.9956709956709957,
+    "train_f1": 0.7899255867200916,
+    "train_roc_auc": 0.9981713076268951,
+    "scale_pos_weight": 19.64069264069264,
+    "classification_report": {
+      "Legitimate Job Post": {
+        "precision": 0.9940047961630696,
+        "recall": 0.9744343226564796,
+        "f1-score": 0.9841222733343226,
+        "support": 3403.0
+      },
+      "Fraudulent Job Post": {
+        "precision": 0.6375,
+        "recall": 0.884393063583815,
+        "f1-score": 0.7409200968523002,
+        "support": 173.0
+      },
+      "accuracy": 0.9700782997762863,
+      "macro avg": {
+        "precision": 0.8157523980815348,
+        "recall": 0.9294136931201473,
+        "f1-score": 0.8625211850933114,
+        "support": 3576.0
+      },
+      "weighted avg": {
+        "precision": 0.9767577800175967,
+        "recall": 0.9700782997762863,
+        "f1-score": 0.9723566199418757,
+        "support": 3576.0
+      }
+    },
+    "fit_status": "Good Fit",
+    "fit_explanation": "Training and testing scores are close enough to suggest reasonable generalization.",
+    "cv_fold_accuracy": [
+      0.9678434113946173,
+      0.9619014330653618,
+      0.965396714435512,
+      0.9549108703250612,
+      0.9590909090909091
+    ],
+    "cv_fold_precision": [
+      0.6185567010309279,
+      0.5707547169811321,
+      0.5934579439252337,
+      0.5227272727272727,
+      0.5532994923857868
+    ],
+    "cv_fold_recall": [
+      0.8695652173913043,
+      0.8705035971223022,
+      0.9136690647482014,
+      0.8273381294964028,
+      0.7898550724637681
+    ],
+    "cv_fold_f1": [
+      0.7228915662650602,
+      0.6894586894586895,
+      0.7195467422096318,
+      0.6406685236768802,
+      0.6507462686567164
+    ],
+    "cv_mean_accuracy": 0.9618286676622925,
+    "cv_mean_precision": 0.5717592254100706,
+    "cv_mean_recall": 0.8541862162443958,
+    "cv_mean_f1": 0.6846623580533956,
+    "cv_std_accuracy": 0.004566500558184445,
+    "cv_std_precision": 0.03288386009605559,
+    "cv_std_recall": 0.04219074705019934,
+    "cv_std_f1": 0.03402104053820777
+  },
+  "Before SMOTE - Random Forest": {
+    "scenario": "Before SMOTE",
+    "accuracy": 0.9798657718120806,
+    "precision": 1.0,
+    "recall": 0.5838150289017341,
+    "f1": 0.7372262773722628,
+    "roc_auc": 0.9886295499211,
+    "train_accuracy": 1.0,
+    "train_precision": 1.0,
+    "train_recall": 1.0,
+    "train_f1": 1.0,
+    "train_roc_auc": 1.0,
+    "scale_pos_weight": 19.64069264069264,
+    "classification_report": {
+      "Legitimate Job Post": {
+        "precision": 0.9792805755395684,
+        "recall": 1.0,
+        "f1-score": 0.9895318406513521,
+        "support": 3403.0
+      },
+      "Fraudulent Job Post": {
+        "precision": 1.0,
+        "recall": 0.5838150289017341,
+        "f1-score": 0.7372262773722628,
+        "support": 173.0
+      },
+      "accuracy": 0.9798657718120806,
+      "macro avg": {
+        "precision": 0.9896402877697842,
+        "recall": 0.791907514450867,
+        "f1-score": 0.8633790590118074,
+        "support": 3576.0
+      },
+      "weighted avg": {
+        "precision": 0.9802829414320892,
+        "recall": 0.9798657718120806,
+        "f1-score": 0.9773257829200092,
+        "support": 3576.0
+      }
+    },
+    "fit_status": "Overfitting",
+    "fit_explanation": "Training scores are materially higher than testing scores, which suggests memorization.",
+    "cv_fold_accuracy": [
+      0.9779797273680532,
+      0.9741349178608878,
+      0.9765816148199931,
+      0.9730863334498427,
+      0.9734265734265735
+    ],
+    "cv_fold_precision": [
+      0.9518072289156626,
+      0.9113924050632911,
+      0.9864864864864865,
+      0.9558823529411765,
+      0.9696969696969697
+    ],
+    "cv_fold_recall": [
+      0.572463768115942,
+      0.5179856115107914,
+      0.5251798561151079,
+      0.4676258992805755,
+      0.463768115942029
+    ],
+    "cv_fold_f1": [
+      0.7149321266968326,
+      0.6605504587155964,
+      0.6854460093896714,
+      0.6280193236714976,
+      0.6274509803921569
+    ],
+    "cv_mean_accuracy": 0.97504183338507,
+    "cv_mean_precision": 0.9550530886207174,
+    "cv_mean_recall": 0.509404650192889,
+    "cv_mean_f1": 0.663279779773151,
+    "cv_std_accuracy": 0.0019108997054152858,
+    "cv_std_precision": 0.024979913240853975,
+    "cv_std_recall": 0.04031649701669108,
+    "cv_std_f1": 0.03374539524483905
+  },
+  "Before SMOTE - XGBoost": {
+    "scenario": "Before SMOTE",
+    "accuracy": 0.9773489932885906,
+    "precision": 0.7674418604651163,
+    "recall": 0.7630057803468208,
+    "f1": 0.7652173913043478,
+    "roc_auc": 0.9831447600637996,
+    "train_accuracy": 0.9948965324384788,
+    "train_precision": 0.9046997389033943,
+    "train_recall": 1.0,
+    "train_f1": 0.9499657299520219,
+    "train_roc_auc": 0.9999919426853525,
+    "scale_pos_weight": 19.64069264069264,
+    "classification_report": {
+      "Legitimate Job Post": {
+        "precision": 0.9879553466509988,
+        "recall": 0.988245665589186,
+        "f1-score": 0.988100484795064,
+        "support": 3403.0
+      },
+      "Fraudulent Job Post": {
+        "precision": 0.7674418604651163,
+        "recall": 0.7630057803468208,
+        "f1-score": 0.7652173913043478,
+        "support": 173.0
+      },
+      "accuracy": 0.9773489932885906,
+      "macro avg": {
+        "precision": 0.8776986035580576,
+        "recall": 0.8756257229680033,
+        "f1-score": 0.8766589380497058,
+        "support": 3576.0
+      },
+      "weighted avg": {
+        "precision": 0.9772873284434602,
+        "recall": 0.9773489932885906,
+        "f1-score": 0.9773178295450937,
+        "support": 3576.0
+      }
+    },
+    "fit_status": "Overfitting",
+    "fit_explanation": "Training scores are materially higher than testing scores, which suggests memorization.",
+    "cv_fold_accuracy": [
+      0.9821740650122335,
+      0.9751835022719328,
+      0.9748339741349179,
+      0.9741349178608878,
+      0.9783216783216783
+    ],
+    "cv_fold_precision": [
+      0.8270676691729323,
+      0.7463768115942029,
+      0.7278911564625851,
+      0.7480916030534351,
+      0.7878787878787878
+    ],
+    "cv_fold_recall": [
+      0.7971014492753623,
+      0.7410071942446043,
+      0.7697841726618705,
+      0.7050359712230215,
+      0.7536231884057971
+    ],
+    "cv_fold_f1": [
+      0.8118081180811808,
+      0.7436823104693141,
+      0.7482517482517482,
+      0.725925925925926,
+      0.7703703703703704
+    ],
+    "cv_mean_accuracy": 0.9769296275203301,
+    "cv_mean_precision": 0.7674612056323887,
+    "cv_mean_recall": 0.7533103951621312,
+    "cv_mean_f1": 0.760007694619708,
+    "cv_std_accuracy": 0.0029897507794288125,
+    "cv_std_precision": 0.03565201292472388,
+    "cv_std_recall": 0.030564451130494896,
+    "cv_std_f1": 0.029519337118106184
+  },
+  "After SMOTE - Logistic Regression": {
+    "scenario": "After SMOTE",
+    "accuracy": 0.9784675615212528,
+    "precision": 0.7376237623762376,
+    "recall": 0.861271676300578,
+    "f1": 0.7946666666666666,
+    "roc_auc": 0.9813663224730304,
+    "train_accuracy": 0.9906693115862171,
+    "train_precision": 0.9845461800769063,
+    "train_recall": 0.9969877305120858,
+    "train_f1": 0.9907278966196977,
+    "train_roc_auc": 0.9992365782232355,
+    "scale_pos_weight": 1.0,
+    "classification_report": {
+      "Legitimate Job Post": {
+        "precision": 0.992886781268524,
+        "recall": 0.9844255069056714,
+        "f1-score": 0.9886380404308691,
+        "support": 3403.0
+      },
+      "Fraudulent Job Post": {
+        "precision": 0.7376237623762376,
+        "recall": 0.861271676300578,
+        "f1-score": 0.7946666666666666,
+        "support": 173.0
+      },
+      "accuracy": 0.9784675615212528,
+      "macro avg": {
+        "precision": 0.8652552718223808,
+        "recall": 0.9228485916031247,
+        "f1-score": 0.8916523535487679,
+        "support": 3576.0
+      },
+      "weighted avg": {
+        "precision": 0.980537647524574,
+        "recall": 0.9784675615212528,
+        "f1-score": 0.9792540785569297,
+        "support": 3576.0
+      }
+    },
+    "fit_status": "Overfitting",
+    "fit_explanation": "Training scores are materially higher than testing scores, which suggests memorization.",
+    "cv_fold_accuracy": null,
+    "cv_fold_precision": null,
+    "cv_fold_recall": null,
+    "cv_fold_f1": null,
+    "cv_mean_accuracy": null,
+    "cv_mean_precision": null,
+    "cv_mean_recall": null,
+    "cv_mean_f1": null,
+    "cv_std_accuracy": null,
+    "cv_std_precision": null,
+    "cv_std_recall": null,
+    "cv_std_f1": null
+  },
+  "After SMOTE - Random Forest": {
+    "scenario": "After SMOTE",
+    "accuracy": 0.9837807606263982,
+    "precision": 0.9914529914529915,
+    "recall": 0.6705202312138728,
+    "f1": 0.8,
+    "roc_auc": 0.9852985889702898,
+    "train_accuracy": 1.0,
+    "train_precision": 1.0,
+    "train_recall": 1.0,
+    "train_f1": 1.0,
+    "train_roc_auc": 1.0,
+    "scale_pos_weight": 1.0,
+    "classification_report": {
+      "Legitimate Job Post": {
+        "precision": 0.9835212489158717,
+        "recall": 0.9997061416397296,
+        "f1-score": 0.9915476537452638,
+        "support": 3403.0
+      },
+      "Fraudulent Job Post": {
+        "precision": 0.9914529914529915,
+        "recall": 0.6705202312138728,
+        "f1-score": 0.8,
+        "support": 173.0
+      },
+      "accuracy": 0.9837807606263982,
+      "macro avg": {
+        "precision": 0.9874871201844315,
+        "recall": 0.8351131864268012,
+        "f1-score": 0.8957738268726319,
+        "support": 3576.0
+      },
+      "weighted avg": {
+        "precision": 0.9839049713596417,
+        "recall": 0.9837807606263982,
+        "f1-score": 0.9822809467827552,
+        "support": 3576.0
+      }
+    },
+    "fit_status": "Overfitting",
+    "fit_explanation": "Training scores are materially higher than testing scores, which suggests memorization.",
+    "cv_fold_accuracy": null,
+    "cv_fold_precision": null,
+    "cv_fold_recall": null,
+    "cv_fold_f1": null,
+    "cv_mean_accuracy": null,
+    "cv_mean_precision": null,
+    "cv_mean_recall": null,
+    "cv_mean_f1": null,
+    "cv_std_accuracy": null,
+    "cv_std_precision": null,
+    "cv_std_recall": null,
+    "cv_std_f1": null
+  },
+  "After SMOTE - XGBoost": {
+    "scenario": "After SMOTE",
+    "accuracy": 0.9865771812080537,
+    "precision": 0.9629629629629629,
+    "recall": 0.7514450867052023,
+    "f1": 0.8441558441558441,
+    "roc_auc": 0.9852272476342704,
+    "train_accuracy": 0.9981632503122474,
+    "train_precision": 0.9993372118712718,
+    "train_recall": 0.9969877305120858,
+    "train_f1": 0.9981610886355278,
+    "train_roc_auc": 0.9999688814577918,
+    "scale_pos_weight": 1.0,
+    "classification_report": {
+      "Legitimate Job Post": {
+        "precision": 0.987503632664923,
+        "recall": 0.9985307081986482,
+        "f1-score": 0.9929865575686733,
+        "support": 3403.0
+      },
+      "Fraudulent Job Post": {
+        "precision": 0.9629629629629629,
+        "recall": 0.7514450867052023,
+        "f1-score": 0.8441558441558441,
+        "support": 173.0
+      },
+      "accuracy": 0.9865771812080537,
+      "macro avg": {
+        "precision": 0.975233297813943,
+        "recall": 0.8749878974519252,
+        "f1-score": 0.9185712008622586,
+        "support": 3576.0
+      },
+      "weighted avg": {
+        "precision": 0.9863164022794535,
+        "recall": 0.9865771812080537,
+        "f1-score": 0.9857864139947304,
+        "support": 3576.0
+      }
+    },
+    "fit_status": "Overfitting",
+    "fit_explanation": "Training scores are materially higher than testing scores, which suggests memorization.",
+    "cv_fold_accuracy": null,
+    "cv_fold_precision": null,
+    "cv_fold_recall": null,
+    "cv_fold_f1": null,
+    "cv_mean_accuracy": null,
+    "cv_mean_precision": null,
+    "cv_mean_recall": null,
+    "cv_mean_f1": null,
+    "cv_std_accuracy": null,
+    "cv_std_precision": null,
+    "cv_std_recall": null,
+    "cv_std_f1": null
+  }
+}
