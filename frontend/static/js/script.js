@@ -40,6 +40,8 @@
     themeIcon: document.getElementById("themeIcon"),
     apiStatusDot: document.getElementById("apiStatusDot"),
     apiStatusText: document.getElementById("apiStatusText"),
+    modelBackendStatusDot: document.getElementById("modelBackendStatusDot"),
+    modelBackendStatusText: document.getElementById("modelBackendStatusText"),
     heroSubtitle: document.getElementById("heroSubtitle"),
 
     tabWebsite: document.getElementById("tabWebsite"),
@@ -57,10 +59,22 @@
     scanBtnLabel: document.getElementById("scanBtnLabel"),
     clearBtn: document.getElementById("clearBtn"),
 
+    scanLoading: document.getElementById("scanLoading"),
+    scanLoadingStep: document.getElementById("scanLoadingStep"),
+    scanLoadingBarFill: document.getElementById("scanLoadingBarFill"),
+
     resultCard: document.getElementById("resultCard"),
     verdictBadge: document.getElementById("verdictBadge"),
     verdictIcon: document.getElementById("verdictIcon"),
     verdictText: document.getElementById("verdictText"),
+    threatLevelPill: document.getElementById("threatLevelPill"),
+    threatLevelPillText: document.getElementById("threatLevelPillText"),
+    reportId: document.getElementById("reportId"),
+    reportTimestamp: document.getElementById("reportTimestamp"),
+    recommendationBlock: document.getElementById("recommendationBlock"),
+    recommendationIcon: document.getElementById("recommendationIcon"),
+    recommendationText: document.getElementById("recommendationText"),
+    aiSummaryText: document.getElementById("aiSummaryText"),
     copyResultBtn: document.getElementById("copyResultBtn"),
     exportPdfBtn: document.getElementById("exportPdfBtn"),
 
@@ -116,9 +130,13 @@
       if (!res.ok) throw new Error("Backend responded with an error status.");
       el.apiStatusDot.className = "status-pill__dot status-pill__dot--online";
       el.apiStatusText.textContent = "Backend online";
+      el.modelBackendStatusDot.className = "status-tag__dot status-tag__dot--online";
+      el.modelBackendStatusText.textContent = "Online";
     } catch (err) {
       el.apiStatusDot.className = "status-pill__dot status-pill__dot--offline";
       el.apiStatusText.textContent = "Backend unavailable";
+      el.modelBackendStatusDot.className = "status-tag__dot status-tag__dot--offline";
+      el.modelBackendStatusText.textContent = "Unavailable";
     }
   }
 
@@ -305,15 +323,51 @@
       );
       el.apiStatusDot.className = "status-pill__dot status-pill__dot--offline";
       el.apiStatusText.textContent = "Backend unavailable";
+      el.modelBackendStatusDot.className = "status-tag__dot status-tag__dot--offline";
+      el.modelBackendStatusText.textContent = "Unavailable";
     } finally {
       setLoading(false);
     }
   }
 
+  const LOADING_STEPS = [
+    "Cleaning input text",
+    "Extracting TF-IDF features",
+    "Running XGBoost inference",
+    "Calculating confidence score",
+  ];
+  let loadingStepTimer = null;
+
   function setLoading(isLoading) {
     el.scanBtn.disabled = isLoading;
     el.scanBtn.classList.toggle("is-loading", isLoading);
     el.scanBtnLabel.textContent = isLoading ? "Scanning..." : "Scan for Threats";
+
+    // Disable inputs while a scan is in flight so nothing changes mid-request.
+    el.jobDescription.disabled = isLoading;
+    el.jobUrl.disabled = isLoading;
+    el.tabWebsite.disabled = isLoading;
+    el.tabEmail.disabled = isLoading;
+    el.clearBtn.disabled = isLoading;
+
+    if (isLoading) {
+      // Hide any previous result while a fresh scan runs, and show the skeleton.
+      el.resultCard.hidden = true;
+      el.scanLoading.hidden = false;
+      el.scanLoading.scrollIntoView({ behavior: "smooth", block: "nearest" });
+
+      let stepIndex = 0;
+      el.scanLoadingStep.textContent = LOADING_STEPS[0];
+      el.scanLoadingBarFill.style.width = "0%";
+      window.clearInterval(loadingStepTimer);
+      loadingStepTimer = window.setInterval(() => {
+        stepIndex = Math.min(stepIndex + 1, LOADING_STEPS.length - 1);
+        el.scanLoadingStep.textContent = LOADING_STEPS[stepIndex];
+      }, 550);
+    } else {
+      window.clearInterval(loadingStepTimer);
+      el.scanLoading.hidden = true;
+    }
   }
 
   /* ---------------------------------------------------------------------
@@ -325,12 +379,25 @@
     const confidencePct = clamp((data.confidence ?? 0) * 100, 0, 100);
 
     el.resultCard.hidden = false;
+    // Restart the reveal animation each time so the report re-animates in.
+    el.resultCard.style.animation = "none";
+    void el.resultCard.offsetWidth;
+    el.resultCard.style.animation = "";
     el.resultCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
 
     // Verdict badge
     el.verdictBadge.className = `verdict ${isFraud ? "verdict--danger" : "verdict--safe"}`;
     el.verdictIcon.className = isFraud ? "fa-solid fa-triangle-exclamation" : "fa-solid fa-circle-check";
     el.verdictText.textContent = isFraud ? "Fake Job" : "Real Job";
+
+    // Threat level pill (color-coded low/medium/high)
+    const levelKey = threatLevelLabel(riskScore).toLowerCase();
+    el.threatLevelPill.className = `threat-pill threat-pill--${levelKey}`;
+    el.threatLevelPillText.textContent = `${threatLevelLabel(riskScore)} Threat`;
+
+    // Report meta
+    el.reportId.textContent = Math.random().toString(36).slice(2, 8).toUpperCase();
+    el.reportTimestamp.textContent = new Date().toLocaleString();
 
     // Gauge (risk score)
     const gaugeColor = riskScore >= 65 ? "var(--danger)" : riskScore >= 35 ? "var(--warn)" : "var(--safe)";
@@ -361,14 +428,69 @@
     // Model risk factors (from backend)
     renderRiskFactors(data.risk_factors || []);
 
-    // Stash for copy/export
-    el.resultCard.dataset.lastResult = JSON.stringify({
-      prediction: data.prediction,
-      riskScore,
-      confidencePct,
-      threatLevel: threatLevelLabel(riskScore),
-      scannedAt: new Date().toISOString(),
-    });
+    // Recommendation + AI summary (derived from the model's actual output)
+    try {
+      const recommendation = buildRecommendation(isFraud, riskScore);
+      el.recommendationBlock.className = `recommendation recommendation--${recommendation.tone}`;
+      el.recommendationIcon.className = recommendation.icon;
+      el.recommendationText.textContent = recommendation.text;
+      el.aiSummaryText.textContent = buildAiSummary(data, { isFraud, riskScore, confidencePct });
+
+      // Stash for copy/export
+      el.resultCard.dataset.lastResult = JSON.stringify({
+        prediction: data.prediction,
+        riskScore,
+        confidencePct,
+        threatLevel: threatLevelLabel(riskScore),
+        recommendation: recommendation.text,
+        summary: el.aiSummaryText.textContent,
+        scannedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      // Don't let a malformed response silently blank these two sections —
+      // show something and log the real cause to the console.
+      console.error("Failed to build recommendation/summary:", err, data);
+      el.recommendationBlock.className = "recommendation";
+      el.recommendationIcon.className = "fa-solid fa-circle-info";
+      el.recommendationText.textContent = "Recommendation unavailable — check the console for details.";
+      el.aiSummaryText.textContent = "Summary unavailable — check the console for details.";
+    }
+  }
+
+  /* ---------------------------------------------------------------------
+   * Recommendation + AI summary copy (derived from real model output only)
+   * ------------------------------------------------------------------- */
+  function buildRecommendation(isFraud, riskScore) {
+    if (isFraud || riskScore >= 65) {
+      return {
+        tone: "danger",
+        icon: "fa-solid fa-ban",
+        text: "Do not apply or share personal information. This posting shows strong fraud signals — report it to the platform and avoid any contact requesting payment or ID documents.",
+      };
+    }
+    if (riskScore >= 35) {
+      return {
+        tone: "medium",
+        icon: "fa-solid fa-triangle-exclamation",
+        text: "Proceed with caution. Verify the company's legitimacy independently — check its official site, LinkedIn presence, and recruiter identity before sharing sensitive details.",
+      };
+    }
+    return {
+      tone: "safe",
+      icon: "fa-solid fa-circle-check",
+      text: "No major fraud signals detected. Standard due diligence is still recommended before sharing sensitive personal or financial information.",
+    };
+  }
+
+  function buildAiSummary(data, { isFraud, riskScore, confidencePct }) {
+    const factors = Array.isArray(data.risk_factors) ? data.risk_factors : [];
+    const level = threatLevelLabel(riskScore).toLowerCase();
+    const verdictPhrase = isFraud ? "flagged this posting as likely fraudulent" : "classified this posting as likely legitimate";
+    const confidencePhrase = `with ${confidencePct.toFixed(1)}% model confidence`;
+    const factorPhrase = factors.length
+      ? ` Key signals contributing to this assessment include ${factors.slice(0, 3).join(", ")}.`
+      : " No strong red-flag language was detected in the text.";
+    return `The model ${verdictPhrase} ${confidencePhrase}, placing it in the ${level} threat tier (risk score ${riskScore.toFixed(0)}/100).${factorPhrase}`;
   }
 
   function threatLevelLabel(riskScore) {
@@ -422,6 +544,8 @@
       `Fraud Risk: ${result.riskScore.toFixed(0)}%`,
       `Confidence: ${result.confidencePct.toFixed(1)}%`,
       `Threat Level: ${result.threatLevel}`,
+      `Recommendation: ${result.recommendation}`,
+      `Summary: ${result.summary}`,
       `Scanned: ${new Date(result.scannedAt).toLocaleString()}`,
     ].join("\n");
 
@@ -449,6 +573,7 @@
     clearFieldError(el.jobDescription, el.descError);
     clearFieldError(el.jobUrl, el.urlError);
     el.resultCard.hidden = true;
+    el.scanLoading.hidden = true;
     showToast("Form cleared.", "info", 2200);
   });
 
