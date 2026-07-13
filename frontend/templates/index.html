@@ -124,6 +124,11 @@
                 <i class="fa-solid fa-globe input-wrap__icon"></i>
                 <input type="text" id="jobUrl" class="text-input" placeholder="https://company.com/careers/senior-engineer" autocomplete="off" />
               </div>
+              <div class="form-actions" style="margin-top: 10px;">
+                <button type="button" class="btn btn--secondary" id="extractBtn">
+                  <i class="fa-solid fa-download"></i> Fetch Job
+                </button>
+              </div>
               <span class="field-error" id="urlError"></span>
             </div>
 
@@ -138,6 +143,7 @@
                 placeholder="Paste the full job description here, including title, responsibilities, requirements, and contact details..."
                 rows="10"
               ></textarea>
+              <div class="extraction-summary" id="extractionSummary" hidden></div>
               <span class="field-error" id="descError"></span>
             </div>
 
