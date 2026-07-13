@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from backend.routes.extractor import router as extractor_router
 from backend.schemas import JobPredictionRequest, JobPredictionResponse
 from backend.service import ModelLoadError, PredictionService
 
@@ -28,6 +29,7 @@ app.add_middleware(
 )
 
 prediction_service = PredictionService()
+app.include_router(extractor_router)
 
 # ---------------------------------------------------------------------------
 # Frontend hosting (new — does not touch the existing API routes below).

@@ -439,6 +439,22 @@ ul, ol, dl, dd { margin: 0; padding: 0; list-style: none; }
 .text-input { padding-left: 38px; }
 .textarea-input { min-height: 210px; resize: vertical; line-height: 1.6; }
 
+.extraction-summary {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+}
+.extraction-summary strong { color: var(--text-primary); }
+.extraction-summary--error {
+  background: var(--danger-bg);
+  border-color: var(--danger-border);
+  color: var(--danger);
+}
+
 .text-input:focus, .textarea-input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-bg);

@@ -13,6 +13,7 @@
   "use strict";
 
   const API_PREDICT_URL = "/predict-job";
+  const API_EXTRACT_URL = "/extract-job";
   const API_HEALTH_URL = "/health";
   const HISTORY_KEY = "sentinel_scan_history";
   const THEME_KEY = "sentinel_theme";
@@ -58,6 +59,8 @@
     scanBtn: document.getElementById("scanBtn"),
     scanBtnLabel: document.getElementById("scanBtnLabel"),
     clearBtn: document.getElementById("clearBtn"),
+    extractBtn: document.getElementById("extractBtn"),
+    extractionSummary: document.getElementById("extractionSummary"),
 
     scanLoading: document.getElementById("scanLoading"),
     scanLoadingStep: document.getElementById("scanLoadingStep"),
@@ -246,6 +249,88 @@
   }
 
   /* ---------------------------------------------------------------------
+   * Extraction flow
+   * ------------------------------------------------------------------- */
+  async function extractJobFromUrl(url) {
+    if (!url) {
+      showToast("Enter a job posting URL to fetch the details.", "warning");
+      return null;
+    }
+
+    if (!isLikelyValidUrl(url)) {
+      showFieldError(el.jobUrl, el.urlError, "That doesn't look like a valid URL (include https://).");
+      showToast("The job URL looks invalid. Double-check it and try again.", "warning");
+      return null;
+    }
+
+    clearFieldError(el.jobUrl, el.urlError);
+    setExtractionLoading(true);
+
+    try {
+      const response = await fetch(API_EXTRACT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url, timeout: 20 }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const detail = payload && payload.detail ? payload.detail : "Unable to extract job details from this website.";
+        throw new Error(detail);
+      }
+
+      if (!payload || !payload.success) {
+        throw new Error("Unable to extract job description from this website.");
+      }
+
+      el.jobDescription.value = payload.description || "";
+      el.charCounter.textContent = `${el.jobDescription.value.length.toLocaleString()} characters`;
+      renderExtractionSummary(payload);
+      showToast(`Fetched ${payload.title || "job details"} from the posting.`, "success");
+      return payload;
+    } catch (err) {
+      console.error("Extraction failed:", err);
+      renderExtractionSummary({ error: err.message || "Unable to extract job description from this website." });
+      showToast(err.message || "Unable to extract job description from this website.", "error", 6000);
+      return null;
+    } finally {
+      setExtractionLoading(false);
+    }
+  }
+
+  function setExtractionLoading(isLoading) {
+    el.extractBtn.disabled = isLoading;
+    el.extractBtn.classList.toggle("is-loading", isLoading);
+    const label = el.extractBtn.querySelector("i");
+    if (label) {
+      label.className = isLoading ? "fa-solid fa-spinner fa-spin" : "fa-solid fa-download";
+    }
+  }
+
+  function renderExtractionSummary(payload) {
+    if (!payload || payload.error) {
+      el.extractionSummary.hidden = false;
+      el.extractionSummary.className = "extraction-summary extraction-summary--error";
+      el.extractionSummary.innerHTML = `<strong>Extraction failed.</strong> ${escapeHtml(payload && payload.error ? payload.error : "Unable to extract job description from this website.")}`;
+      return;
+    }
+
+    const title = payload.title || "Untitled role";
+    const company = payload.company || "Unknown company";
+    el.extractionSummary.hidden = false;
+    el.extractionSummary.className = "extraction-summary";
+    el.extractionSummary.innerHTML = `<strong>${escapeHtml(title)}</strong> at <span>${escapeHtml(company)}</span>`;
+  }
+
+  el.extractBtn.addEventListener("click", async () => {
+    const url = el.jobUrl.value.trim();
+    const payload = await extractJobFromUrl(url);
+    if (payload) {
+      await runScan({ description: el.jobDescription.value.trim(), url });
+    }
+  });
+
+  /* ---------------------------------------------------------------------
    * Form submission — validation + API call
    * ------------------------------------------------------------------- */
   el.scanForm.addEventListener("submit", async (event) => {
@@ -278,6 +363,11 @@
   });
 
   async function runScan({ description, url }) {
+    if (!description) {
+      showToast("Paste or fetch a job description before scanning.", "warning");
+      return;
+    }
+
     setLoading(true);
 
     const startedAt = performance.now();
@@ -572,6 +662,8 @@
     el.charCounter.textContent = "0 characters";
     clearFieldError(el.jobDescription, el.descError);
     clearFieldError(el.jobUrl, el.urlError);
+    el.extractionSummary.hidden = true;
+    el.extractionSummary.innerHTML = "";
     el.resultCard.hidden = true;
     el.scanLoading.hidden = true;
     showToast("Form cleared.", "info", 2200);
