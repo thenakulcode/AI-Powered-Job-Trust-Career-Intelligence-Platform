@@ -684,6 +684,159 @@ ul, ol, dl, dd { margin: 0; padding: 0; list-style: none; }
 .risk-factors__list li i { margin-top: 2px; }
 
 /* =========================================================
+   Resume ATS / upload section
+   ========================================================= */
+.resume-ats {
+  margin-top: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.resume-ats__card {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 18px;
+  align-items: center;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--bg-raised);
+}
+
+.ats-gauge-wrap {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 140px;
+  height: 140px;
+  margin: 0 auto;
+}
+
+.ats-gauge {
+  width: 140px;
+  height: 140px;
+  transform: rotate(-90deg);
+}
+
+.ats-gauge__track,
+.ats-gauge__fill {
+  fill: none;
+  stroke-width: 10;
+}
+
+.ats-gauge__track { stroke: rgba(255,255,255,0.14); }
+.ats-gauge__fill {
+  stroke: var(--safe);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.4s ease;
+}
+
+.ats-gauge__value {
+  position: absolute;
+  display: grid;
+  gap: 2px;
+  text-align: center;
+}
+
+.ats-gauge__value span {
+  font-size: 1.7rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.ats-gauge__value small {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.ats-metrics {
+  display: grid;
+  gap: 8px;
+}
+
+.ats-metric {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.04);
+  color: var(--text-secondary);
+}
+
+.ats-metric strong { color: var(--text-primary); }
+
+.resume-section {
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+
+.resume-section__title {
+  font-size: 0.95rem;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+}
+
+.resume-section__text {
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip-item {
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.chip-item--muted {
+  background: rgba(255,255,255,0.05);
+  color: var(--text-secondary);
+}
+
+.resume-list {
+  display: grid;
+  gap: 8px;
+  color: var(--text-secondary);
+  padding-left: 18px;
+}
+
+.resume-upload {
+  margin-top: 18px;
+  display: grid;
+  gap: 10px;
+}
+
+.upload-area {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  padding: 18px;
+  border: 1px dashed var(--border);
+  border-radius: 14px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-align: center;
+}
+
+.upload-area input { display: none; }
+.upload-area i { font-size: 1.4rem; color: var(--accent); }
+.resume-upload__filename { font-size: 0.9rem; color: var(--text-primary); }
+.resume-upload__hint { color: var(--text-tertiary); font-size: 0.9rem; }
+
+@media (max-width: 760px) {
+  .resume-ats__card { grid-template-columns: 1fr; }
+}
+
+/* =========================================================
    Side column: Model information / history
    ========================================================= */
 .side-column { display: flex; flex-direction: column; gap: 18px; }

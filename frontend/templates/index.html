@@ -261,6 +261,77 @@
               <h3 class="section-label"><i class="fa-solid fa-robot"></i> AI Summary</h3>
               <p class="ai-summary__text" id="aiSummaryText">&mdash;</p>
             </div>
+
+            <div class="resume-ats" id="resumeAtsBlock" hidden>
+              <h3 class="section-label"><i class="fa-solid fa-file-lines"></i> Resume ATS Match</h3>
+              <div class="resume-ats__card">
+                <div class="ats-gauge-wrap">
+                  <svg viewBox="0 0 120 120" class="ats-gauge">
+                    <circle class="ats-gauge__track" cx="60" cy="60" r="48"></circle>
+                    <circle class="ats-gauge__fill" id="atsGaugeFill" cx="60" cy="60" r="48"></circle>
+                  </svg>
+                  <div class="ats-gauge__value">
+                    <span id="atsScoreValue">0</span>
+                    <small>ATS Score</small>
+                  </div>
+                </div>
+                <div class="ats-metrics">
+                  <div class="ats-metric"><span>Skill Match</span><strong id="atsSkillMatchValue">0%</strong></div>
+                  <div class="ats-metric"><span>Keyword Match</span><strong id="atsKeywordMatchValue">0%</strong></div>
+                  <div class="ats-metric"><span>Experience</span><strong id="atsExperienceValue">0%</strong></div>
+                  <div class="ats-metric"><span>Education</span><strong id="atsEducationValue">0%</strong></div>
+                  <div class="ats-metric"><span>Projects</span><strong id="atsProjectValue">0%</strong></div>
+                  <div class="ats-metric"><span>Format</span><strong id="atsFormatValue">0%</strong></div>
+                </div>
+              </div>
+
+              <div class="resume-section">
+                <h4 class="resume-section__title">Resume Summary</h4>
+                <p id="atsSummaryText" class="resume-section__text"></p>
+              </div>
+
+              <div class="resume-section">
+                <h4 class="resume-section__title">Matched Skills</h4>
+                <div class="chip-list" id="matchedSkillsList"></div>
+              </div>
+
+              <div class="resume-section">
+                <h4 class="resume-section__title">Missing Skills</h4>
+                <div class="chip-list chip-list--muted" id="missingSkillsList"></div>
+              </div>
+
+              <div class="resume-section">
+                <h4 class="resume-section__title">Improvement Suggestions</h4>
+                <ul class="resume-list" id="recommendationsList"></ul>
+              </div>
+
+              <div class="resume-section">
+                <h4 class="resume-section__title">Recommended Courses</h4>
+                <ul class="resume-list" id="coursesList"></ul>
+              </div>
+
+              <div class="resume-section">
+                <h4 class="resume-section__title">Recommended Projects</h4>
+                <ul class="resume-list" id="projectsList"></ul>
+              </div>
+
+              <div class="resume-section">
+                <h4 class="resume-section__title">Interview Preparation</h4>
+                <ul class="resume-list" id="interviewList"></ul>
+              </div>
+            </div>
+
+            <div class="resume-upload" id="resumeUploadBlock">
+              <h3 class="section-label"><i class="fa-solid fa-cloud-arrow-up"></i> Resume Upload</h3>
+              <label class="upload-area" for="resumeFileInput">
+                <input id="resumeFileInput" type="file" accept=".pdf,.docx" />
+                <i class="fa-solid fa-file-arrow-up"></i>
+                <span id="resumeUploadLabel">Upload PDF or DOCX resume</span>
+                <span id="resumeFileName" class="resume-upload__filename">No file selected</span>
+              </label>
+              <button class="btn btn--secondary" id="resumeAnalyzeBtn" type="button" disabled>Analyze Resume</button>
+              <p class="resume-upload__hint" id="resumeUploadHint">Resume analysis is shown only for legitimate job matches.</p>
+            </div>
           </div>
         </section>
 

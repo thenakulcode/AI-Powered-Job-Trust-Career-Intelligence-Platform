@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, status
+from fastapi import File, FastAPI, Form, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -12,6 +13,10 @@ from fastapi.staticfiles import StaticFiles
 from backend.routes.extractor import router as extractor_router
 from backend.schemas import JobPredictionRequest, JobPredictionResponse
 from backend.service import ModelLoadError, PredictionService
+from backend.services.ats_service import ATSService
+from backend.services.resume_parser import extract_resume_text
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Fake Job Detection API",
@@ -29,7 +34,47 @@ app.add_middleware(
 )
 
 prediction_service = PredictionService()
+ats_service = ATSService()
 app.include_router(extractor_router)
+
+
+@app.post("/resume-ats", summary="Analyze a resume against a job description")
+def analyze_resume(job_description: str | None = Form(None), file: UploadFile | None = File(None)) -> dict[str, object]:
+    if not job_description or not job_description.strip():
+        raise HTTPException(status_code=400, detail="A job description is required.")
+
+    if file is None or not file.filename:
+        raise HTTPException(status_code=400, detail="A resume file is required.")
+
+    filename = (file.filename or "").lower()
+    if not (filename.endswith(".pdf") or filename.endswith(".docx")):
+        raise HTTPException(status_code=400, detail="Only PDF and DOCX resumes are supported.")
+
+    logger.info(
+        "Resume upload received: filename=%s content_type=%s",
+        file.filename,
+        file.content_type or "unknown",
+    )
+
+    try:
+        file_bytes = file.file.read()
+        logger.info("Resume bytes read: filename=%s size=%s", file.filename, len(file_bytes))
+        resume_text = extract_resume_text(file.filename, file_bytes)
+        logger.info("Resume text extracted successfully: filename=%s chars=%s", file.filename, len(resume_text))
+    except ValueError as exc:
+        logger.warning("Resume upload rejected: %s", exc)
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # pragma: no cover - defensive guard.
+        logger.exception("Failed to parse uploaded resume: %s", exc)
+        raise HTTPException(status_code=422, detail="Unable to parse the uploaded resume.") from exc
+    finally:
+        if file is not None:
+            file.file.close()
+
+    logger.info("Running ATS assessment for: %s", file.filename)
+    result = ats_service.assess_resume(resume_text, job_description)
+    logger.info("ATS assessment completed for: %s", file.filename)
+    return result
 
 # ---------------------------------------------------------------------------
 # Frontend hosting (new — does not touch the existing API routes below).

@@ -1,0 +1,7 @@
+John Doe
+Python, FastAPI, SQL, Docker
+Education: B.S. Computer Science
+Experience: 3 years building backend APIs
+Projects: Built a FastAPI service with Docker deployment
+Certifications: AWS Cloud Practitioner
+Achievements: Improved API latency by 35%

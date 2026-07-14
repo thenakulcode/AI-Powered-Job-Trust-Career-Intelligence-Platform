@@ -14,6 +14,7 @@
 
   const API_PREDICT_URL = "/predict-job";
   const API_EXTRACT_URL = "/extract-job";
+  const API_RESUME_ATS_URL = "/resume-ats";
   const API_HEALTH_URL = "/health";
   const HISTORY_KEY = "sentinel_scan_history";
   const THEME_KEY = "sentinel_theme";
@@ -78,6 +79,28 @@
     recommendationIcon: document.getElementById("recommendationIcon"),
     recommendationText: document.getElementById("recommendationText"),
     aiSummaryText: document.getElementById("aiSummaryText"),
+    resumeAtsBlock: document.getElementById("resumeAtsBlock"),
+    resumeUploadBlock: document.getElementById("resumeUploadBlock"),
+    resumeFileInput: document.getElementById("resumeFileInput"),
+    resumeUploadLabel: document.getElementById("resumeUploadLabel"),
+    resumeFileName: document.getElementById("resumeFileName"),
+    resumeAnalyzeBtn: document.getElementById("resumeAnalyzeBtn"),
+    resumeUploadHint: document.getElementById("resumeUploadHint"),
+    atsScoreValue: document.getElementById("atsScoreValue"),
+    atsGaugeFill: document.getElementById("atsGaugeFill"),
+    atsSkillMatchValue: document.getElementById("atsSkillMatchValue"),
+    atsKeywordMatchValue: document.getElementById("atsKeywordMatchValue"),
+    atsExperienceValue: document.getElementById("atsExperienceValue"),
+    atsEducationValue: document.getElementById("atsEducationValue"),
+    atsProjectValue: document.getElementById("atsProjectValue"),
+    atsFormatValue: document.getElementById("atsFormatValue"),
+    atsSummaryText: document.getElementById("atsSummaryText"),
+    matchedSkillsList: document.getElementById("matchedSkillsList"),
+    missingSkillsList: document.getElementById("missingSkillsList"),
+    recommendationsList: document.getElementById("recommendationsList"),
+    coursesList: document.getElementById("coursesList"),
+    projectsList: document.getElementById("projectsList"),
+    interviewList: document.getElementById("interviewList"),
     copyResultBtn: document.getElementById("copyResultBtn"),
     exportPdfBtn: document.getElementById("exportPdfBtn"),
 
@@ -104,6 +127,23 @@
   };
 
   const GAUGE_CIRCUMFERENCE = 251; // matches the arc path length used in the SVG
+  let selectedResumeFile = null;
+
+  function updateResumeUploadUi() {
+    const hasFile = Boolean(selectedResumeFile && selectedResumeFile.name);
+    const hasDescription = Boolean(el.jobDescription.value.trim());
+
+    el.resumeAnalyzeBtn.disabled = !(hasFile && hasDescription);
+    el.resumeFileName.textContent = hasFile ? `Selected: ${selectedResumeFile.name}` : "No file selected";
+    el.resumeUploadLabel.textContent = hasFile ? "Resume ready to upload" : "Upload PDF or DOCX resume";
+
+    if (!hasFile) {
+      el.resumeUploadHint.textContent = "Upload a PDF or DOCX resume to evaluate its ATS alignment.";
+      return;
+    }
+
+    el.resumeUploadHint.textContent = `Ready to analyze ${selectedResumeFile.name}.`;
+  }
 
   /* ---------------------------------------------------------------------
    * Theme
@@ -122,6 +162,32 @@
   el.themeToggle.addEventListener("click", () => {
     const current = document.body.getAttribute("data-theme");
     applyTheme(current === "dark" ? "light" : "dark");
+  });
+
+  el.resumeFileInput.addEventListener("change", (event) => {
+    const file = event.target.files && event.target.files[0] ? event.target.files[0] : null;
+    selectedResumeFile = file;
+    console.log("Resume file selected:", file);
+
+    if (!file) {
+      updateResumeUploadUi();
+      return;
+    }
+
+    const allowed = ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
+    if (!allowed.includes(file.type) && !file.name.toLowerCase().endsWith(".pdf") && !file.name.toLowerCase().endsWith(".docx")) {
+      showToast("Please choose a PDF or DOCX file.", "warning");
+      selectedResumeFile = null;
+      updateResumeUploadUi();
+      return;
+    }
+
+    updateResumeUploadUi();
+    showToast(`Selected ${file.name}.`, "success", 2000);
+  });
+
+  el.jobDescription.addEventListener("input", () => {
+    updateResumeUploadUi();
   });
 
   /* ---------------------------------------------------------------------
@@ -468,6 +534,12 @@
     const riskScore = clamp(data.risk_score ?? 0, 0, 100);
     const confidencePct = clamp((data.confidence ?? 0) * 100, 0, 100);
 
+    el.resumeAtsBlock.hidden = true;
+    el.resumeUploadBlock.hidden = isFraud;
+    el.resumeUploadHint.textContent = isFraud
+      ? "Resume analysis is only available when the job appears legitimate."
+      : "Upload a PDF or DOCX resume to evaluate its ATS alignment.";
+
     el.resultCard.hidden = false;
     // Restart the reveal animation each time so the report re-animates in.
     el.resultCard.style.animation = "none";
@@ -545,6 +617,12 @@
       el.recommendationText.textContent = "Recommendation unavailable — check the console for details.";
       el.aiSummaryText.textContent = "Summary unavailable — check the console for details.";
     }
+
+    if (!isFraud) {
+      el.resumeUploadBlock.hidden = false;
+      el.resumeAtsBlock.hidden = true;
+      el.resumeUploadHint.textContent = "Upload a PDF or DOCX resume to evaluate its ATS alignment.";
+    }
   }
 
   /* ---------------------------------------------------------------------
@@ -620,6 +698,123 @@
   function clamp(value, min, max) {
     return Math.min(max, Math.max(min, value));
   }
+
+  function renderAtsResults(payload) {
+    const score = clamp(Number(payload.ats_score || 0), 0, 100);
+    const radius = 48;
+    const circumference = 2 * Math.PI * radius;
+    const offset = circumference - (score / 100) * circumference;
+
+    el.atsScoreValue.textContent = score;
+    el.atsGaugeFill.style.strokeDasharray = `${circumference}`;
+    el.atsGaugeFill.style.strokeDashoffset = `${offset}`;
+    el.atsGaugeFill.style.stroke = score >= 80 ? "var(--safe)" : score >= 60 ? "var(--warn)" : "var(--danger)";
+
+    el.atsSkillMatchValue.textContent = `${Math.round(Number(payload.skill_match ?? payload.keyword_match ?? 0))}%`;
+    el.atsKeywordMatchValue.textContent = `${Math.round(Number(payload.keyword_match ?? 0))}%`;
+    el.atsExperienceValue.textContent = `${Math.round(Number(payload.experience_score ?? 0))}%`;
+    el.atsEducationValue.textContent = `${Math.round(Number(payload.education_score ?? 0))}%`;
+    el.atsProjectValue.textContent = `${Math.round(Number(payload.project_score ?? 0))}%`;
+    el.atsFormatValue.textContent = `${Math.round(Number(payload.format_score ?? 0))}%`;
+
+    el.atsSummaryText.textContent = payload.summary || "Resume summary unavailable.";
+    renderChipList(el.matchedSkillsList, payload.matched_skills || [], "chip-item", false);
+    renderChipList(el.missingSkillsList, payload.missing_skills || [], "chip-item chip-item--muted", true);
+    renderList(el.recommendationsList, payload.recommendations || []);
+    renderList(el.coursesList, payload.courses || []);
+    renderList(el.projectsList, payload.projects_to_build || []);
+    renderList(el.interviewList, payload.interview_topics || []);
+
+    el.resumeAtsBlock.hidden = false;
+  }
+
+  function renderChipList(container, items, baseClass, isMuted) {
+    container.innerHTML = "";
+    if (!items.length) {
+      const empty = document.createElement("div");
+      empty.className = "empty-state";
+      empty.innerHTML = '<i class="fa-solid fa-circle-info"></i><p>No items detected.</p>';
+      container.appendChild(empty);
+      return;
+    }
+    items.forEach((item) => {
+      const chip = document.createElement("span");
+      chip.className = baseClass;
+      chip.textContent = item;
+      container.appendChild(chip);
+    });
+  }
+
+  function renderList(container, items) {
+    container.innerHTML = "";
+    if (!items.length) {
+      const li = document.createElement("li");
+      li.textContent = "No suggestions available.";
+      container.appendChild(li);
+      return;
+    }
+    items.forEach((item) => {
+      const li = document.createElement("li");
+      li.textContent = item;
+      container.appendChild(li);
+    });
+  }
+
+  async function analyzeResume() {
+    const file = selectedResumeFile || (el.resumeFileInput.files && el.resumeFileInput.files[0]);
+    const description = el.jobDescription.value.trim();
+    console.log("Resume analysis started", { file, description });
+
+    if (!file) {
+      showToast("Choose a PDF or DOCX resume before analyzing.", "warning");
+      return;
+    }
+    if (!description) {
+      showToast("Add a job description or fetch one before analyzing the resume.", "warning");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("job_description", description);
+    formData.append("file", file, file.name);
+
+    console.log("Resume upload payload", {
+      job_description: description,
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type,
+    });
+
+    try {
+      const response = await fetch(API_RESUME_ATS_URL, {
+        method: "POST",
+        body: formData,
+      });
+
+      console.log("Resume ATS response status:", response.status);
+      const responseText = await response.text();
+      console.log("Resume ATS response body:", responseText);
+
+      let payload = {};
+      try {
+        payload = responseText ? JSON.parse(responseText) : {};
+      } catch (err) {
+        console.error("Failed to parse ATS response JSON:", err);
+      }
+
+      if (!response.ok) {
+        throw new Error(payload && payload.detail ? payload.detail : "Resume analysis failed.");
+      }
+
+      renderAtsResults(payload);
+      showToast("Resume ATS analysis complete.", "success");
+    } catch (err) {
+      console.error("Resume analysis failed:", err);
+      showToast(err.message || "Resume analysis failed.", "error", 6000);
+    }
+  }
+
+  el.resumeAnalyzeBtn.addEventListener("click", analyzeResume);
 
   /* ---------------------------------------------------------------------
    * Copy / Export
