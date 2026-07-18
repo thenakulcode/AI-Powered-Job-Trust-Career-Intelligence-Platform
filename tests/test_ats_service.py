@@ -1,30 +1,37 @@
 from backend.services.ats_service import ATSService
 
 
-def test_resume_assessment_returns_expected_sections() -> None:
+def test_resume_skill_match_and_score_are_high_for_good_fit() -> None:
     service = ATSService()
-    result = service.assess_resume(
-        resume_text=(
-            "John Doe\n"
-            "Skills: Python, FastAPI, SQL, Docker\n"
-            "Education: B.S. Computer Science\n"
-            "Experience: 3 years building backend APIs and data pipelines\n"
-            "Projects: Built a FastAPI service with Docker deployment\n"
-            "Certifications: AWS Cloud Practitioner\n"
-            "Achievements: Improved API latency by 35%\n"
-        ),
-        job_description=(
-            "Senior Python Engineer. Requirements: Python, FastAPI, SQL, Docker, "
-            "backend APIs, cloud deployment. 3 years experience. Bachelor degree."
-        ),
-    )
+    resume_text = "John Doe\nEmail: john@example.com\nPhone: +1 555 123 4567\nSkills: Python, React, SQL\nEducation: B.S. Computer Science\nExperience: 3 years of backend development\nProjects: Built a Python analytics platform"
+    job_description = "Python React SQL"
 
-    assert result["ats_score"] >= 0
-    assert result["ats_score"] <= 100
-    assert result["matched_skills"]
-    assert result["missing_skills"]
-    assert result["summary"]
-    assert result["recommendations"]
-    assert result["courses"]
-    assert result["projects_to_build"]
-    assert result["interview_topics"]
+    result = service.assess_resume(resume_text, job_description)
+
+    assert result["matchedSkills"] == ["Python", "React", "SQL"]
+    assert result["missingSkills"] == []
+    assert result["atsScore"] >= 90
+
+
+def test_resume_is_marked_not_suitable_for_unrelated_role() -> None:
+    service = ATSService()
+    resume_text = "Jane Smith\nEmail: jane@example.com\nPhone: +1 555 987 6543\nEducation: Mechanical Engineering\nExperience: 5 years in manufacturing\nProjects: Built assembly-line automation"
+    job_description = "Java Developer role requiring Java Spring Boot Angular REST API SQL Git Microservices"
+
+    result = service.assess_resume(resume_text, job_description)
+
+    assert result["matchedSkills"] == []
+    assert len(result["missingSkills"]) > 5
+    assert result["atsScore"] < 20
+    assert result["status"] == "Not Suitable"
+
+
+def test_resume_frontend_stack_matches_react_role() -> None:
+    service = ATSService()
+    resume_text = "Alice Brown\nEmail: alice@example.com\nPhone: +1 555 111 2222\nSkills: HTML, CSS, JavaScript, React\nEducation: B.S. Information Technology\nExperience: 2 years of frontend work\nProjects: Built a React dashboard"
+    job_description = "React Developer role"
+
+    result = service.assess_resume(resume_text, job_description)
+
+    assert set(["HTML", "CSS", "JavaScript", "React"]).issubset(set(result["matchedSkills"]))
+    assert result["atsScore"] > 80

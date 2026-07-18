@@ -700,7 +700,7 @@
   }
 
   function renderAtsResults(payload) {
-    const score = clamp(Number(payload.ats_score || 0), 0, 100);
+    const score = clamp(Number(payload.atsScore ?? payload.ats_score ?? 0), 0, 100);
     const radius = 48;
     const circumference = 2 * Math.PI * radius;
     const offset = circumference - (score / 100) * circumference;
@@ -710,20 +710,28 @@
     el.atsGaugeFill.style.strokeDashoffset = `${offset}`;
     el.atsGaugeFill.style.stroke = score >= 80 ? "var(--safe)" : score >= 60 ? "var(--warn)" : "var(--danger)";
 
-    el.atsSkillMatchValue.textContent = `${Math.round(Number(payload.skill_match ?? payload.keyword_match ?? 0))}%`;
-    el.atsKeywordMatchValue.textContent = `${Math.round(Number(payload.keyword_match ?? 0))}%`;
-    el.atsExperienceValue.textContent = `${Math.round(Number(payload.experience_score ?? 0))}%`;
-    el.atsEducationValue.textContent = `${Math.round(Number(payload.education_score ?? 0))}%`;
-    el.atsProjectValue.textContent = `${Math.round(Number(payload.project_score ?? 0))}%`;
-    el.atsFormatValue.textContent = `${Math.round(Number(payload.format_score ?? 0))}%`;
+    const breakdown = payload.scoreBreakdown || {};
+    el.atsSkillMatchValue.textContent = `${Math.round(Number(breakdown.skills ?? payload.skill_match ?? payload.matchScore ?? 0))}%`;
+    el.atsKeywordMatchValue.textContent = `${Math.round(Number(breakdown.keywords ?? payload.keyword_match ?? 0))}%`;
+    el.atsExperienceValue.textContent = `${Math.round(Number(breakdown.experience ?? payload.experience_score ?? 0))}%`;
+    el.atsEducationValue.textContent = `${Math.round(Number(breakdown.education ?? payload.education_score ?? 0))}%`;
+    el.atsProjectValue.textContent = `${Math.round(Number(breakdown.projects ?? payload.project_score ?? 0))}%`;
+    el.atsFormatValue.textContent = `${Math.round(Number(breakdown.formatting ?? payload.format_score ?? 0))}%`;
 
-    el.atsSummaryText.textContent = payload.summary || "Resume summary unavailable.";
-    renderChipList(el.matchedSkillsList, payload.matched_skills || [], "chip-item", false);
-    renderChipList(el.missingSkillsList, payload.missing_skills || [], "chip-item chip-item--muted", true);
-    renderList(el.recommendationsList, payload.recommendations || []);
-    renderList(el.coursesList, payload.courses || []);
-    renderList(el.projectsList, payload.projects_to_build || []);
-    renderList(el.interviewList, payload.interview_topics || []);
+    const summaryParts = [
+      payload.summary || payload.message || "Resume summary unavailable.",
+      payload.status ? `Status: ${payload.status}` : "",
+      payload.matchScore != null ? `Match Score: ${payload.matchScore}%` : "",
+      payload.warning ? `Warning: ${payload.warning}` : "",
+    ].filter(Boolean);
+    el.atsSummaryText.textContent = summaryParts.join(" \n");
+
+    renderChipList(el.matchedSkillsList, payload.matchedSkills || payload.matched_skills || [], "chip-item", false);
+    renderChipList(el.missingSkillsList, payload.missingSkills || payload.missing_skills || [], "chip-item chip-item--muted", true);
+    renderList(el.recommendationsList, payload.recommendations || payload.recommendationsList || []);
+    renderList(el.coursesList, payload.learningRoadmap || payload.courses || []);
+    renderList(el.projectsList, payload.recommendedJobs || payload.projects_to_build || []);
+    renderList(el.interviewList, payload.recommendations || payload.interview_topics || []);
 
     el.resumeAtsBlock.hidden = false;
   }
