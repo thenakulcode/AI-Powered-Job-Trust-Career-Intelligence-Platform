@@ -7,6 +7,7 @@ import re
 from html import unescape
 from typing import Any
 
+from backend.services.recommendation_engine import RecommendationEngine
 from backend.services.resume_parser import SKILL_TERMS, normalize_skill_name, parse_resume_sections
 from backend.services.scraper import extract_job_post
 
@@ -63,26 +64,7 @@ class ATSService:
             "aws": ["AWS", "Cloud", "DevOps"],
             "azure": ["Azure", "Cloud", "DevOps"],
         }
-        self._advice_map = {
-            "java": "Learn Java through a small backend project",
-            "spring boot": "Build one Spring Boot REST API project",
-            "react": "Build a small React UI component",
-            "javascript": "Practice JavaScript DOM and async patterns",
-            "html": "Add one polished HTML/CSS landing page",
-            "css": "Refine one responsive CSS layout",
-            "sql": "Practice SQL joins, indexes, and query optimization",
-            "git": "Add Git/GitHub to your workflow",
-            "docker": "Containerize one service with Docker",
-            "aws": "Deploy a small app to AWS",
-            "azure": "Deploy a small app to Azure",
-            "rest api": "Build one REST API with clean endpoints",
-            "angular": "Build one Angular component-based feature",
-            "node.js": "Build one Node.js service",
-            "python": "Build one Python automation or API project",
-            "microservices": "Split one project into microservices",
-            "devops": "Automate one deployment pipeline",
-            "machine learning": "Train one small machine learning model",
-        }
+        self._recommendation_engine = RecommendationEngine()
 
     def assess_resume(self, resume_text: str, job_description: str) -> dict[str, Any]:
         logger.info("------------------------------------------------")
@@ -111,8 +93,13 @@ class ATSService:
         match_score = int(round(score_breakdown["match_score"]))
         status = "Suitable" if ats_score >= 60 else "Not Suitable"
         reason = self._build_reason(matched_skills, missing_skills, missing_keywords, parsed, cleaned_job_text)
-        recommendations = self._build_recommendations(missing_skills)
-        learning_roadmap = self._build_learning_roadmap(missing_skills, parsed)
+        recommendation_payload = self._recommendation_engine.generate(missing_skills, cleaned_job_text, {
+            "experience_level": parsed.get("total_experience", 0),
+            "projects": parsed.get("projects", []),
+            "education": parsed.get("education", []),
+        })
+        recommendations = recommendation_payload["improvementSuggestions"]
+        learning_roadmap = recommendation_payload["recommendedProjects"]
         recommended_jobs = self._build_recommended_jobs(matched_skills, missing_skills)
         warning = self._build_warning(ats_score, status, reason)
 
@@ -142,6 +129,11 @@ class ATSService:
             "recommendedJobs": recommended_jobs,
             "warning": warning,
             "reason": reason,
+            "improvementSuggestions": recommendation_payload["improvementSuggestions"],
+            "recommendedCourses": recommendation_payload["recommendedCourses"],
+            "recommendedProjects": recommendation_payload["recommendedProjects"],
+            "interviewPreparation": recommendation_payload["interviewPreparation"],
+            "learningRoadmap": recommendation_payload.get("learningRoadmap", learning_roadmap),
             "resumeSummary": {
                 "name": parsed.get("name", ""),
                 "email": parsed.get("email", ""),
@@ -187,6 +179,11 @@ class ATSService:
             "learningRoadmap": [],
             "recommendedJobs": [],
             "warning": message,
+            "improvementSuggestions": [],
+            "recommendedCourses": [],
+            "recommendedProjects": [],
+            "interviewPreparation": [],
+            "learningRoadmap": [],
             "reason": message,
             "resumeSummary": {},
             "scoreBreakdown": {

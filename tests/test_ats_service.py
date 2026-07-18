@@ -35,3 +35,21 @@ def test_resume_frontend_stack_matches_react_role() -> None:
 
     assert set(["HTML", "CSS", "JavaScript", "React"]).issubset(set(result["matchedSkills"]))
     assert result["atsScore"] > 80
+
+
+def test_recommendations_are_context_aware_for_java_full_stack_role() -> None:
+    service = ATSService()
+    resume_text = "John Doe\nEmail: john@example.com\nPhone: +1 555 123 4567\nSkills: HTML, CSS, JavaScript, React, SQL\nEducation: B.S. Computer Science\nExperience: 2 years of frontend work\nProjects: Built a React dashboard"
+    job_description = "Java Full Stack Developer role requiring Java Spring Boot Angular REST API Maven Git Microservices"
+
+    result = service.assess_resume(resume_text, job_description)
+
+    flattened = " ".join(result["recommendations"] + result["learningRoadmap"] + result["recommendedJobs"]).lower()
+    assert "java" in flattened or "spring" in flattened
+    assert "fastapi" not in flattened
+    assert "django" not in flattened
+    assert "flask" not in flattened
+    assert result["improvementSuggestions"]
+    assert result["recommendedCourses"]
+    assert result["recommendedProjects"]
+    assert result["interviewPreparation"]
