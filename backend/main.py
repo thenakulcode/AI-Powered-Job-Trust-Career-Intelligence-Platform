@@ -2,20 +2,21 @@
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 
-from fastapi import File, FastAPI, Form, HTTPException, UploadFile, status
+from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from backend.routes.extractor import router as extractor_router
-from backend.routes.resume import router as resume_router
-from backend.schemas import JobPredictionRequest, JobPredictionResponse
+from backend.extraction_service import JobExtractionService
+from backend.schemas import (
+    JobExtractionRequest,
+    JobExtractionResponse,
+    JobPredictionRequest,
+    JobPredictionResponse,
+)
 from backend.service import ModelLoadError, PredictionService
-
-logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Fake Job Detection API",
@@ -33,8 +34,7 @@ app.add_middleware(
 )
 
 prediction_service = PredictionService()
-app.include_router(extractor_router)
-app.include_router(resume_router)
+extraction_service = JobExtractionService()
 
 # ---------------------------------------------------------------------------
 # Frontend hosting (new — does not touch the existing API routes below).
@@ -92,4 +92,40 @@ def predict_job(payload: JobPredictionRequest) -> JobPredictionResponse:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to analyze the job description.",
+        ) from exc
+
+
+@app.post(
+    "/extract-job",
+    response_model=JobExtractionResponse,
+    tags=["extraction"],
+    summary="Extract a job description from a job posting URL",
+)
+def extract_job(payload: JobExtractionRequest) -> JobExtractionResponse:
+    """Fetch a job posting URL and extract its job description.
+
+    Expected failure modes (blocked sites, 404s, CAPTCHAs, no identifiable
+    job content) are returned as a normal 200 response with
+    `success: false` and a human-readable `error`, so the frontend can show
+    it directly without treating it as a hard failure. Only genuinely
+    unexpected exceptions raise a 500, mirroring predict_job above.
+    """
+
+    try:
+        result = extraction_service.extract(str(payload.url))
+        return JobExtractionResponse(
+            success=result.success,
+            description=result.description,
+            title=result.title,
+            company=result.company,
+            location=result.location,
+            employment_type=result.employment_type,
+            experience=result.experience,
+            salary=result.salary,
+            error=result.error,
+        )
+    except Exception as exc:  # pragma: no cover - defensive API guard.
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to extract the job description from that URL.",
         ) from exc
