@@ -1,4 +1,13 @@
-"""Resume parsing utilities for PDF and DOCX files."""
+"""Resume parsing utilities for PDF and DOCX files.
+
+Backward-compatible with the previous resume_parser.py: same public
+function names and signatures (extract_resume_text, parse_resume_sections,
+normalize_skill_name, display_skill_name) and SKILL_TERMS is preserved as a
+legacy alias so any other code still importing it does not break. However,
+skill/keyword extraction internally now delegates to the domain-independent
+extractor in skill_extraction.py instead of a hardcoded software-only list,
+so resumes from any profession parse correctly.
+"""
 
 from __future__ import annotations
 
@@ -10,86 +19,29 @@ from typing import Any
 import fitz
 from docx import Document
 
+from backend.services.skill_extraction import (
+    display_phrase,
+    extract_key_phrases,
+    normalize_phrase,
+)
+
 logger = logging.getLogger(__name__)
 
 SECTION_LABELS: dict[str, tuple[str, ...]] = {
-    "skills": ("skills", "technical skills", "core skills", "tools", "technologies"),
-    "education": ("education", "academic background", "academics"),
-    "projects": ("projects", "selected projects", "personal projects", "portfolio"),
-    "experience": ("experience", "work experience", "professional experience", "employment"),
-    "certifications": ("certifications", "licenses", "certificates"),
-    "achievements": ("achievements", "awards", "accomplishments", "highlights"),
+    "skills": ("skills", "technical skills", "core skills", "tools", "technologies", "competencies", "expertise"),
+    "education": ("education", "academic background", "academics", "qualifications"),
+    "projects": ("projects", "selected projects", "personal projects", "portfolio", "publications", "research"),
+    "experience": ("experience", "work experience", "professional experience", "employment", "clinical experience", "teaching experience"),
+    "certifications": ("certifications", "licenses", "certificates", "licensure"),
+    "achievements": ("achievements", "awards", "accomplishments", "highlights", "honors"),
     "languages": ("languages", "spoken languages"),
-    "internships": ("internships", "internship"),
+    "internships": ("internships", "internship", "residency", "fellowship"),
 }
 
-SKILL_TERMS = [
-    "python",
-    "java",
-    "javascript",
-    "typescript",
-    "react",
-    "node.js",
-    "fastapi",
-    "django",
-    "flask",
-    "sql",
-    "postgres",
-    "mysql",
-    "mongodb",
-    "docker",
-    "kubernetes",
-    "aws",
-    "azure",
-    "gcp",
-    "linux",
-    "git",
-    "rest api",
-    "microservices",
-    "machine learning",
-    "ai",
-    "data science",
-    "nlp",
-    "spark",
-    "hadoop",
-    "tableau",
-    "power bi",
-    "excel",
-    "pytest",
-    "jenkins",
-    "ci/cd",
-    "html",
-    "css",
-    "spring boot",
-    "redis",
-    "graphql",
-    "elasticsearch",
-    "snowflake",
-    "pandas",
-    "numpy",
-    "tensorflow",
-    "pytorch",
-    "angular",
-    "agile",
-    "scrum",
-    "devops",
-    "terraform",
-]
-
-SKILL_ALIASES: dict[str, tuple[str, ...]] = {
-    "javascript": ("javascript", "js", "jscript", "ecmascript"),
-    "typescript": ("typescript", "ts"),
-    "react": ("react", "react.js", "reactjs", "react-js", "jsx"),
-    "node.js": ("node.js", "nodejs", "node js", "node"),
-    "spring boot": ("spring boot", "springboot", "spring-boot"),
-    "angular": ("angular", "angularjs", "angular.js"),
-    "rest api": ("rest api", "restful api", "restfulapis"),
-    "machine learning": ("machine learning", "ml"),
-    "ci/cd": ("ci/cd", "cicd"),
-    "power bi": ("power bi", "powerbi"),
-    "c++": ("c++", "cpp"),
-    "c#": ("c#", "csharp"),
-}
+# Legacy alias kept for backward compatibility with any code that still
+# imports SKILL_TERMS directly. New code should not rely on this list — skill
+# extraction is now domain-independent via skill_extraction.extract_key_phrases.
+SKILL_TERMS: list[str] = []
 
 
 def normalize_text(text: str | None) -> str:
@@ -99,43 +51,15 @@ def normalize_text(text: str | None) -> str:
 
 
 def normalize_skill_name(value: str | None) -> str:
-    if not value:
-        return ""
-    cleaned = normalize_text(value).lower()
-    cleaned = cleaned.replace("react.js", "react")
-    cleaned = cleaned.replace("reactjs", "react")
-    cleaned = cleaned.replace("nodejs", "node.js")
-    cleaned = cleaned.replace("springboot", "spring boot")
-    cleaned = cleaned.replace("spring-boot", "spring boot")
-    cleaned = cleaned.replace("angularjs", "angular")
-    cleaned = cleaned.replace("angular.js", "angular")
-    cleaned = cleaned.replace("restful api", "rest api")
-    cleaned = cleaned.replace("powerbi", "power bi")
-    cleaned = cleaned.replace("cicd", "ci/cd")
-    cleaned = re.sub(r"[^a-z0-9.+/#]+", " ", cleaned).strip()
-    for canonical, aliases in SKILL_ALIASES.items():
-        if cleaned in aliases:
-            return canonical
-    if cleaned in {"node", "node js"}:
-        return "node.js"
-    if cleaned in {"api"}:
-        return "rest api"
-    return cleaned
+    """Backward-compatible alias for normalize_phrase — same name/signature
+    as the old software-only version, now domain-independent under the
+    hood."""
+    return normalize_phrase(value)
 
 
 def display_skill_name(value: str | None) -> str:
-    skill = normalize_skill_name(value)
-    display_map = {
-        "node.js": "Node.js",
-        "rest api": "REST API",
-        "ci/cd": "CI/CD",
-        "power bi": "Power BI",
-        "machine learning": "Machine Learning",
-        "spring boot": "Spring Boot",
-        "c++": "C++",
-        "c#": "C#",
-    }
-    return display_map.get(skill, skill.title())
+    """Backward-compatible alias for display_phrase."""
+    return display_phrase(value)
 
 
 def _extract_text_from_pdf(file_bytes: bytes) -> str:
@@ -234,7 +158,7 @@ def parse_resume_sections(resume_text: str) -> dict[str, Any]:
     internships = cleaned_internships or _extract_internships(lines)
     certifications = cleaned_certifications or _extract_certifications(lines)
     achievements = cleaned_achievements or _extract_achievements(lines)
-    languages = cleaned_languages or _extract_languages(lines, skills)
+    languages = cleaned_languages or _extract_languages(lines)
     tools = _extract_tools(lines, skills)
 
     if not skills and not education and not projects and not experience and not certifications and not achievements:
@@ -275,23 +199,23 @@ def parse_resume_sections(resume_text: str) -> dict[str, Any]:
 
 
 def _extract_skills(text: str, section_items: list[str]) -> list[str]:
+    """Domain-independent skill extraction: pulls explicit skills-section
+    items (split on delimiters) plus dynamically extracted key phrases from
+    the full resume text, rather than matching against a fixed software
+    vocabulary."""
     candidates: list[str] = []
     for item in section_items:
         for part in re.split(r"[,;|/]+", item):
-            normalized = normalize_skill_name(part)
+            normalized = normalize_phrase(part)
             if normalized:
                 candidates.append(normalized)
 
-    lowered_text = normalize_text(text).lower()
-    for canonical in SKILL_TERMS:
-        alias_pattern = re.escape(canonical).replace(r"\ ", r"(?:\\s|\\-|\\/)+")
-        if re.search(rf"(?<![a-z0-9]){alias_pattern}(?![a-z0-9])", lowered_text):
-            candidates.append(canonical)
+    candidates.extend(extract_key_phrases(text, top_n=30))
 
     unique_items: list[str] = []
     seen: set[str] = set()
     for item in candidates:
-        value = normalize_skill_name(item)
+        value = normalize_phrase(item)
         if not value or value in seen:
             continue
         seen.add(value)
@@ -303,7 +227,12 @@ def _extract_skills(text: str, section_items: list[str]) -> list[str]:
 def _extract_education(lines: list[str]) -> list[str]:
     matches: list[str] = []
     for line in lines:
-        if re.search(r"\b(b\.s|b\.tech|m\.s|m\.tech|bachelor|master|phd|associate|diploma|engineering|computer science|degree)\b", line, re.I):
+        if re.search(
+            r"\b(b\.s|b\.tech|m\.s|m\.tech|bachelor|master|phd|ph\.d|associate|diploma|degree|"
+            r"mba|md|jd|university|college|institute)\b",
+            line,
+            re.I,
+        ):
             matches.append(line)
     return matches
 
@@ -311,7 +240,7 @@ def _extract_education(lines: list[str]) -> list[str]:
 def _extract_projects(lines: list[str]) -> list[str]:
     matches: list[str] = []
     for line in lines:
-        if re.search(r"\b(project|portfolio|built|developed|implemented)\b", line, re.I):
+        if re.search(r"\b(project|portfolio|built|developed|implemented|published|publication|study|campaign|case)\b", line, re.I):
             matches.append(line)
     return matches
 
@@ -319,59 +248,62 @@ def _extract_projects(lines: list[str]) -> list[str]:
 def _extract_experience(lines: list[str]) -> list[str]:
     matches: list[str] = []
     for line in lines:
-        if re.search(r"\b(years?|yrs?|yr|experience|developer|engineer|analyst|intern|worked|built)\b", line, re.I):
+        if re.search(
+            r"\b(years?|yrs?|yr|experience|worked|led|managed|taught|treated|litigated|"
+            r"analyzed|conducted|supervised|designed|coordinated)\b",
+            line,
+            re.I,
+        ):
             matches.append(line)
     return matches
 
 
 def _extract_internships(lines: list[str]) -> list[str]:
-    return [line for line in lines if re.search(r"\bintern(ship|ships|ed)?\b", line, re.I)]
+    return [line for line in lines if re.search(r"\b(intern(ship|ships|ed)?|residency|fellowship)\b", line, re.I)]
 
 
 def _extract_certifications(lines: list[str]) -> list[str]:
-    return [line for line in lines if re.search(r"\b(certified|certificate|certification|aws|oracle|azure|scrum|pmp)\b", line, re.I)]
+    return [line for line in lines if re.search(r"\b(certified|certificate|certification|license|licensure|board certified)\b", line, re.I)]
 
 
 def _extract_achievements(lines: list[str]) -> list[str]:
     matches: list[str] = []
     for line in lines:
-        if re.search(r"\b(improved|increased|reduced|delivered|optimized|won|awarded|built|launched|boosted)\b", line, re.I):
+        if re.search(r"\b(improved|increased|reduced|delivered|optimized|won|awarded|launched|boosted|recognized|honored|published)\b", line, re.I):
             matches.append(line)
     return matches
 
 
-def _extract_languages(lines: list[str], skills: list[str]) -> list[str]:
+def _extract_languages(lines: list[str]) -> list[str]:
     languages = []
     for line in lines:
-        if re.search(r"\b(english|spanish|french|german|hindi|arabic|mandarin|japanese|korean)\b", line, re.I):
+        if re.search(r"\b(english|spanish|french|german|hindi|arabic|mandarin|japanese|korean|portuguese|italian)\b", line, re.I):
             languages.append(line)
-    if not languages:
-        for skill in skills:
-            if skill.lower() in {"python", "java", "javascript", "typescript", "react", "node", "sql"}:
-                continue
     return languages
 
 
 def _extract_tools(lines: list[str], skills: list[str]) -> list[str]:
+    """Tools are no longer detected against a fixed software list; any line
+    matching a generic "tool/instrument/platform" cue, plus overlap with
+    already-extracted skill phrases, is treated as a tool reference."""
     tools = []
     for line in lines:
-        if re.search(r"\b(git|docker|kubernetes|jira|jenkins|linux|aws|azure|tableau|excel|postman)\b", line, re.I):
+        if re.search(r"\b(tool|platform|software|instrument|equipment|system)\b", line, re.I):
             tools.append(line)
-    if not tools:
-        for skill in skills:
-            if skill.lower() in {"docker", "kubernetes", "git", "aws", "azure", "tableau", "excel"}:
-                tools.append(skill)
     return tools
 
 
 def _extract_name(lines: list[str]) -> str:
+    section_starts = tuple(
+        label for labels in SECTION_LABELS.values() for label in labels
+    )
     for line in lines:
         candidate = normalize_text(line)
         if not candidate or len(candidate.split()) > 6:
             continue
         if re.search(r"@|\+\d|\bhttps?://\b", candidate):
             continue
-        if candidate.lower().startswith(("skills", "education", "projects", "experience", "certifications", "achievements")):
+        if candidate.lower().startswith(section_starts):
             continue
         return candidate
     return ""

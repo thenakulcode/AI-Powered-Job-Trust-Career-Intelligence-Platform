@@ -1,4 +1,15 @@
-"""Deterministic ATS matching engine for resumes and job descriptions."""
+"""Domain-independent ATS matching engine.
+
+Orchestrates the modular pipeline:
+  SkillExtractor (skill_extraction.py) -> DomainDetector -> EducationMatcher
+  -> ExperienceMatcher -> ProjectMatcher -> RecommendationEngine
+  -> InterviewGenerator -> JobRecommender
+
+The public method signature (`assess_resume`) and the JSON response shape
+are unchanged from the previous ats_service.py, so the existing frontend and
+resume.py route keep working without modification. Only the intelligence
+underneath changed: nothing here assumes a software engineering role.
+"""
 
 from __future__ import annotations
 
@@ -7,68 +18,41 @@ import re
 from html import unescape
 from typing import Any
 
-from backend.services.recommendation_engine import RecommendationEngine
-from backend.services.resume_parser import SKILL_TERMS, normalize_skill_name, parse_resume_sections
+from backend.services.domain_detector import DomainMatch, detect_domain, humanize_domain
+from backend.services.education_matcher import EducationMatcher
+from backend.services.experience_matcher import ExperienceMatcher
+from backend.services.interview_generator import InterviewGenerator
+from backend.services.job_recommender import JobRecommender
+from backend.services.project_matcher import ProjectMatcher
+from backend.services.recommendation_engine_v2 import DomainRecommendationEngine
+from backend.services.resume_parser import parse_resume_sections
 from backend.services.scraper import extract_job_post
+from backend.services.skill_extraction import (
+    display_phrase,
+    extract_key_phrases,
+    match_phrases,
+    normalize_phrase,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class ATSService:
-    """Generate a deterministic ATS-style match score from resume and job data."""
+    """Generate a deterministic, domain-independent ATS-style match score
+    from resume and job data. Public API unchanged from the previous
+    implementation for backward compatibility."""
 
     def __init__(self) -> None:
-        self._skill_catalog = {skill.lower(): skill for skill in SKILL_TERMS}
-        self._skill_catalog.update(
-            {
-                "html": "HTML",
-                "css": "CSS",
-                "javascript": "JavaScript",
-                "react": "React",
-                "sql": "SQL",
-                "python": "Python",
-                "java": "Java",
-                "spring boot": "Spring Boot",
-                "rest api": "REST API",
-                "node.js": "Node.js",
-                "angular": "Angular",
-                "git": "Git",
-                "docker": "Docker",
-                "aws": "AWS",
-                "azure": "Azure",
-                "microservices": "Microservices",
-                "postgres": "PostgreSQL",
-                "mysql": "MySQL",
-                "mongodb": "MongoDB",
-                "fastapi": "FastAPI",
-                "django": "Django",
-                "flask": "Flask",
-                "kubernetes": "Kubernetes",
-                "linux": "Linux",
-                "terraform": "Terraform",
-                "agile": "Agile",
-                "scrum": "Scrum",
-                "devops": "DevOps",
-                "machine learning": "Machine Learning",
-            }
-        )
-        self._role_skill_map = {
-            "react": ["React", "JavaScript", "HTML", "CSS"],
-            "angular": ["Angular", "TypeScript", "HTML", "CSS"],
-            "java": ["Java", "Spring Boot", "REST API", "SQL"],
-            "python": ["Python", "SQL", "FastAPI", "Django", "Flask"],
-            "node": ["Node.js", "JavaScript", "REST API"],
-            "node.js": ["Node.js", "JavaScript", "REST API"],
-            "spring boot": ["Spring Boot", "Java", "REST API"],
-            "docker": ["Docker", "DevOps", "Linux"],
-            "aws": ["AWS", "Cloud", "DevOps"],
-            "azure": ["Azure", "Cloud", "DevOps"],
-        }
-        self._recommendation_engine = RecommendationEngine()
+        self._education_matcher = EducationMatcher()
+        self._experience_matcher = ExperienceMatcher()
+        self._project_matcher = ProjectMatcher()
+        self._recommendation_engine = DomainRecommendationEngine()
+        self._interview_generator = InterviewGenerator()
+        self._job_recommender = JobRecommender()
 
     def assess_resume(self, resume_text: str, job_description: str) -> dict[str, Any]:
         logger.info("------------------------------------------------")
-        logger.info("ATS stage: starting resume assessment")
+        logger.info("ATS stage: starting resume assessment (domain-independent pipeline)")
         if not resume_text or not resume_text.strip():
             return self._build_error("Unable to extract readable resume text.")
 
@@ -77,37 +61,63 @@ class ATSService:
             return self._build_error("This document does not contain a readable resume profile.")
 
         cleaned_job_text = self._prepare_job_description(job_description)
-        resume_skills = self._extract_resume_skills(parsed, resume_text)
-        job_skills = self._extract_job_skills(cleaned_job_text)
-        job_keywords = self._extract_keywords(cleaned_job_text)
-        resume_keywords = self._extract_keywords(resume_text)
 
-        matched_skills = self._intersect(resume_skills, job_skills)
-        missing_skills = self._difference(job_skills, resume_skills)
-        extra_skills = self._difference(resume_skills, job_skills)
-        matched_keywords = self._intersect(resume_keywords, job_keywords)
-        missing_keywords = self._difference(job_keywords, resume_keywords)
+        # --- Domain detection (job description drives it; resume text is a
+        # secondary signal if the JD is thin) ---------------------------------
+        domain_match = detect_domain(cleaned_job_text)
+        if domain_match.domain == "general":
+            resume_domain = detect_domain(resume_text)
+            if resume_domain.domain != "general":
+                domain_match = DomainMatch(domain=resume_domain.domain, confidence=resume_domain.confidence * 0.5)
 
-        score_breakdown = self._build_score_breakdown(parsed, cleaned_job_text, resume_skills, job_skills, resume_keywords, job_keywords)
+        # --- Dynamic skill/phrase extraction (replaces hardcoded catalog) ----
+        job_phrases = extract_key_phrases(job_description, top_n=25)
+        resume_phrase_source = " ".join(
+            [
+                resume_text or "",
+                " ".join(parsed.get("skills", []) or []),
+                " ".join(parsed.get("experience", []) or []),
+                " ".join(parsed.get("projects", []) or []),
+                " ".join(parsed.get("certifications", []) or []),
+                " ".join(parsed.get("achievements", []) or []),
+            ]
+        )
+        resume_phrases = extract_key_phrases(resume_phrase_source, top_n=40)
+
+        matched_skills, missing_skills, extra_skills = match_phrases(resume_phrases, job_phrases, threshold=0.6)
+
+        job_keywords = job_phrases
+        resume_keywords = resume_phrases
+        matched_keywords, missing_keywords, _ = match_phrases(resume_keywords, job_keywords, threshold=0.6)
+
+        score_breakdown = self._build_score_breakdown(
+            parsed, cleaned_job_text, domain_match, matched_skills, job_phrases, matched_keywords, job_keywords
+        )
         ats_score = int(round(score_breakdown["ats_score"]))
         match_score = int(round(score_breakdown["match_score"]))
         status = "Suitable" if ats_score >= 60 else "Not Suitable"
-        reason = self._build_reason(matched_skills, missing_skills, missing_keywords, parsed, cleaned_job_text)
-        recommendation_payload = self._recommendation_engine.generate(missing_skills, cleaned_job_text, {
-            "experience_level": parsed.get("total_experience", 0),
-            "projects": parsed.get("projects", []),
-            "education": parsed.get("education", []),
-        })
+        reason = self._build_reason(matched_skills, missing_skills, missing_keywords, parsed, domain_match)
+
+        recommendation_payload = self._recommendation_engine.generate(
+            missing_skills,
+            domain_match,
+            {
+                "experience_level": parsed.get("total_experience", 0),
+                "projects": parsed.get("projects", []),
+                "education": parsed.get("education", []),
+            },
+        )
         recommendations = recommendation_payload["improvementSuggestions"]
         learning_roadmap = recommendation_payload["recommendedProjects"]
-        recommended_jobs = self._build_recommended_jobs(matched_skills, missing_skills)
+        recommended_jobs = self._job_recommender.recommend(domain_match, matched_skills, missing_skills)
+        interview_preparation = self._interview_generator.generate(domain_match, matched_skills, missing_skills)
         warning = self._build_warning(ats_score, status, reason)
 
-        logger.info("Resume Skills: %s", [self._display_name(skill) for skill in resume_skills])
-        logger.info("Job Skills: %s", [self._display_name(skill) for skill in job_skills])
-        logger.info("Matched Skills: %s", [self._display_name(skill) for skill in matched_skills])
-        logger.info("Missing Skills: %s", [self._display_name(skill) for skill in missing_skills])
-        logger.info("Extra Skills: %s", [self._display_name(skill) for skill in extra_skills])
+        logger.info("Detected Domain: %s (confidence=%.2f)", domain_match.domain, domain_match.confidence)
+        logger.info("Resume Skills: %s", [display_phrase(s) for s in resume_phrases[:20]])
+        logger.info("Job Skills: %s", [display_phrase(s) for s in job_phrases])
+        logger.info("Matched Skills: %s", [display_phrase(s) for s in matched_skills])
+        logger.info("Missing Skills: %s", [display_phrase(s) for s in missing_skills])
         logger.info("ATS Breakdown: %s", score_breakdown)
         logger.info("Final Score: %s", ats_score)
         logger.info("------------------------------------------------")
@@ -117,23 +127,22 @@ class ATSService:
             "atsScore": ats_score,
             "matchScore": match_score,
             "status": status,
-            "matchedSkills": [self._display_name(skill) for skill in matched_skills],
-            "missingSkills": [self._display_name(skill) for skill in missing_skills],
-            "matchedKeywords": [self._display_name(keyword) for keyword in matched_keywords],
-            "missingKeywords": [self._display_name(keyword) for keyword in missing_keywords],
-            "extraSkills": [self._display_name(skill) for skill in extra_skills[:8]],
-            "strengths": self._build_strengths(matched_skills, matched_keywords),
-            "weaknesses": self._build_weaknesses(missing_skills, missing_keywords, parsed),
+            "matchedSkills": [display_phrase(s) for s in matched_skills],
+            "missingSkills": [display_phrase(s) for s in missing_skills],
+            "matchedKeywords": [display_phrase(k) for k in matched_keywords],
+            "missingKeywords": [display_phrase(k) for k in missing_keywords],
+            "extraSkills": [display_phrase(s) for s in extra_skills[:8]],
+            "strengths": self._build_strengths(matched_skills, matched_keywords, domain_match),
+            "weaknesses": self._build_weaknesses(missing_skills, missing_keywords, parsed, domain_match),
             "recommendations": recommendations,
-            "learningRoadmap": learning_roadmap,
+            "learningRoadmap": recommendation_payload.get("learningRoadmap", learning_roadmap),
             "recommendedJobs": recommended_jobs,
             "warning": warning,
             "reason": reason,
             "improvementSuggestions": recommendation_payload["improvementSuggestions"],
             "recommendedCourses": recommendation_payload["recommendedCourses"],
             "recommendedProjects": recommendation_payload["recommendedProjects"],
-            "interviewPreparation": recommendation_payload["interviewPreparation"],
-            "learningRoadmap": recommendation_payload.get("learningRoadmap", learning_roadmap),
+            "interviewPreparation": interview_preparation,
             "resumeSummary": {
                 "name": parsed.get("name", ""),
                 "email": parsed.get("email", ""),
@@ -155,11 +164,17 @@ class ATSService:
                 "certifications": round(score_breakdown["certifications_score"], 0),
                 "contact": round(score_breakdown["contact_score"], 0),
             },
-            "summary": self._build_summary(matched_skills, missing_skills, ats_score),
+            "summary": self._build_summary(matched_skills, missing_skills, ats_score, domain_match),
             "recommendationsList": recommendations,
-            "learningRoadmapList": learning_roadmap,
+            "learningRoadmapList": recommendation_payload.get("learningRoadmap", learning_roadmap),
             "recommendedJobsList": recommended_jobs,
+            # Additive field: detected domain, safe for old frontends to ignore.
+            "detectedDomain": humanize_domain(domain_match.domain),
         }
+
+    # ------------------------------------------------------------------
+    # Error / validation
+    # ------------------------------------------------------------------
 
     def _build_error(self, message: str) -> dict[str, Any]:
         return {
@@ -183,7 +198,6 @@ class ATSService:
             "recommendedCourses": [],
             "recommendedProjects": [],
             "interviewPreparation": [],
-            "learningRoadmap": [],
             "reason": message,
             "resumeSummary": {},
             "scoreBreakdown": {
@@ -196,6 +210,7 @@ class ATSService:
                 "contact": 0,
             },
             "summary": message,
+            "detectedDomain": "",
         }
 
     def _is_readable_resume(self, parsed: dict[str, Any], resume_text: str) -> bool:
@@ -209,62 +224,28 @@ class ATSService:
         has_any_content = has_education or has_experience or bool(parsed.get("skills")) or bool(parsed.get("projects"))
         return has_contact and has_any_content
 
-    def _extract_resume_skills(self, parsed: dict[str, Any], resume_text: str) -> list[str]:
-        candidates: list[str] = []
-        for skill in parsed.get("skills", []) or []:
-            candidates.extend(self._split_skill_candidates(skill))
-        for section in [parsed.get("experience", []), parsed.get("projects", []), parsed.get("certifications", []), parsed.get("achievements", [])]:
-            for item in section or []:
-                candidates.extend(self._split_skill_candidates(item))
-        text = " ".join([resume_text or "", *(parsed.get("education", []) or []), *(parsed.get("experience", []) or []), *(parsed.get("projects", []) or [])])
-        for skill in self._skill_catalog:
-            if self._contains_skill(text.lower(), skill):
-                candidates.append(skill)
-        normalized = []
-        for candidate in candidates:
-            normalized_skill = normalize_skill_name(candidate)
-            if normalized_skill and normalized_skill.lower() in self._skill_catalog:
-                normalized.append(normalized_skill)
-        return self._unique_items(normalized)
-
-    def _extract_job_skills(self, job_description: str) -> list[str]:
-        cleaned = self._prepare_job_description(job_description)
-        candidates: list[str] = []
-        for skill in self._skill_catalog:
-            if self._contains_skill(cleaned.lower(), skill):
-                candidates.append(skill)
-        if self._looks_like_role_description(cleaned):
-            for role, inferred_skills in self._role_skill_map.items():
-                if self._contains_skill(cleaned.lower(), role):
-                    candidates.extend(inferred_skills)
-        normalized = [normalize_skill_name(candidate) for candidate in candidates]
-        normalized = [skill for skill in normalized if skill]
-        return self._unique_items(normalized)[:10]
-
-    def _extract_keywords(self, value: str) -> list[str]:
-        cleaned = self._clean_text(value)
-        candidates: list[str] = []
-        for skill in self._skill_catalog:
-            if self._contains_skill(cleaned.lower(), skill):
-                candidates.append(skill)
-        return self._unique_items([normalize_skill_name(candidate) for candidate in candidates])
+    # ------------------------------------------------------------------
+    # Scoring
+    # ------------------------------------------------------------------
 
     def _build_score_breakdown(
         self,
         parsed: dict[str, Any],
         job_description: str,
-        resume_skills: list[str],
+        domain_match: DomainMatch,
+        matched_skills: list[str],
         job_skills: list[str],
-        resume_keywords: list[str],
+        matched_keywords: list[str],
         job_keywords: list[str],
     ) -> dict[str, float]:
-        matched_skills = self._intersect(resume_skills, job_skills)
-        matched_keywords = self._intersect(resume_keywords, job_keywords)
         skills_score = self._safe_percent(len(matched_skills), max(len(job_skills), 1))
         keywords_score = self._safe_percent(len(matched_keywords), max(len(job_keywords), 1))
-        experience_score = self._calculate_experience_score(parsed, job_description)
-        projects_score = self._calculate_project_score(parsed, job_description, resume_skills)
-        education_score = self._calculate_education_score(parsed, job_description)
+
+        experience_score, _ = self._experience_matcher.score(
+            job_description, parsed.get("experience", []) or [], parsed.get("total_experience", 0) or 0
+        )
+        projects_score, _ = self._project_matcher.score(job_description, parsed, domain_match)
+        education_score, _ = self._education_matcher.score(job_description, parsed.get("education", []) or [])
         certifications_score = self._calculate_certifications_score(parsed, job_description)
         contact_score = self._calculate_contact_score(parsed)
 
@@ -277,18 +258,11 @@ class ATSService:
             + certifications_score * 0.05
             + contact_score * 0.05
         )
-        match_score = (
-            skills_score * 0.35
-            + keywords_score * 0.20
-            + experience_score * 0.15
-            + projects_score * 0.10
-            + education_score * 0.10
-            + certifications_score * 0.05
-            + contact_score * 0.05
-        )
+        match_score = ats_score
         if not matched_skills and job_skills:
             ats_score = min(ats_score, 15.0)
             match_score = min(match_score, 15.0)
+
         return {
             "skills_score": skills_score,
             "keywords_score": keywords_score,
@@ -301,51 +275,86 @@ class ATSService:
             "match_score": match_score,
         }
 
-    def _calculate_experience_score(self, parsed: dict[str, Any], job_description: str) -> float:
-        resume_years = parsed.get("total_experience") or 0
-        target_years = self._extract_years(job_description)
-        experience_text = " ".join(parsed.get("experience", []) or [])
-        lowered = (job_description + " " + experience_text).lower()
-        has_related_terms = any(term in lowered for term in ["react", "angular", "java", "python", "sql", "api", "developer", "backend", "frontend", "engineer"])
-        if target_years:
-            if resume_years >= target_years:
-                return 100.0
-            return max(20.0, 50.0 + (resume_years / max(target_years, 1)) * 40.0)
-        if resume_years >= 3:
-            return 85.0 if has_related_terms else 45.0
-        if resume_years >= 1:
-            return 70.0 if has_related_terms else 30.0
-        return 20.0
-
-    def _calculate_project_score(self, parsed: dict[str, Any], job_description: str, resume_skills: list[str]) -> float:
-        if not parsed.get("projects"):
-            return 20.0
-        lowered = (job_description + " " + " ".join(parsed.get("projects", []) or [])).lower()
-        if any(skill.lower() in lowered for skill in resume_skills):
-            return 100.0
-        if any(term in lowered for term in ["react", "angular", "java", "python", "sql", "api", "backend", "frontend"]):
-            return 80.0
-        return 60.0
-
-    def _calculate_education_score(self, parsed: dict[str, Any], job_description: str) -> float:
-        if not parsed.get("education"):
-            return 20.0
-        lowered = (job_description + " " + " ".join(parsed.get("education", []) or [])).lower()
-        if any(term in lowered for term in ["computer science", "information technology", "software", "engineering", "technology", "developer", "developer"]):
-            return 90.0
-        return 60.0
-
     def _calculate_certifications_score(self, parsed: dict[str, Any], job_description: str) -> float:
-        if not parsed.get("certifications"):
+        certifications = parsed.get("certifications") or []
+        if not certifications:
             return 0.0
-        lowered = (job_description + " " + " ".join(parsed.get("certifications", []) or [])).lower()
-        if any(term in lowered for term in ["aws", "azure", "scrum", "cloud", "python", "java", "react"]):
-            return 100.0
-        return 40.0
+        job_phrases = extract_key_phrases(job_description, top_n=20)
+        cert_phrases = extract_key_phrases(" ".join(certifications), top_n=20)
+        if not job_phrases:
+            return 40.0
+        matched, _, _ = match_phrases(cert_phrases, job_phrases, threshold=0.55)
+        return 100.0 if matched else 40.0
 
     def _calculate_contact_score(self, parsed: dict[str, Any]) -> float:
         count = sum(1 for value in [parsed.get("email"), parsed.get("phone")] if value)
         return 100.0 if count == 2 else 60.0 if count == 1 else 20.0
+
+    def _safe_percent(self, part: int, total: int) -> float:
+        if total <= 0:
+            return 0.0
+        return round((part / total) * 100, 2)
+
+    # ------------------------------------------------------------------
+    # Narrative text builders
+    # ------------------------------------------------------------------
+
+    def _build_strengths(self, matched_skills: list[str], matched_keywords: list[str], domain_match: DomainMatch) -> list[str]:
+        strengths: list[str] = []
+        if matched_skills:
+            top = ", ".join(display_phrase(s) for s in matched_skills[:3])
+            strengths.append(f"Strong overlap with {top} for this {humanize_domain(domain_match.domain)} role.")
+        if matched_keywords:
+            strengths.append("The resume text overlaps with several job keywords.")
+        return strengths or ["The resume contains enough evidence to be evaluated."]
+
+    def _build_weaknesses(self, missing_skills: list[str], missing_keywords: list[str], parsed: dict[str, Any], domain_match: DomainMatch) -> list[str]:
+        weaknesses: list[str] = []
+        if missing_skills:
+            missing_list = ", ".join(display_phrase(s) for s in missing_skills[:4])
+            weaknesses.append(f"Missing areas for this {humanize_domain(domain_match.domain)} role: {missing_list}.")
+        if missing_keywords:
+            weaknesses.append("Missing keyword coverage from the job description.")
+        if not (parsed.get("projects") or parsed.get("achievements") or parsed.get("experience")):
+            weaknesses.append("The resume does not include strong supporting evidence (projects, achievements, or experience).")
+        return weaknesses or ["No obvious weaknesses detected from the extracted content."]
+
+    def _build_reason(
+        self,
+        matched_skills: list[str],
+        missing_skills: list[str],
+        missing_keywords: list[str],
+        parsed: dict[str, Any],
+        domain_match: DomainMatch,
+    ) -> str:
+        if not matched_skills and missing_skills:
+            missing_list = ", ".join(display_phrase(s) for s in missing_skills[:6])
+            return f"The resume does not show the areas required for this {humanize_domain(domain_match.domain)} role ({missing_list})."
+        if missing_keywords:
+            missing_list = ", ".join(display_phrase(s) for s in missing_skills[:4])
+            return f"The resume is missing several job keywords and required areas ({missing_list})."
+        if not parsed.get("projects") and not parsed.get("achievements"):
+            return "The resume lacks supporting evidence that backs up the role's requirements."
+        return "The resume has a meaningful overlap with the role requirements."
+
+    def _build_warning(self, ats_score: int, status: str, reason: str) -> str:
+        if status == "Not Suitable":
+            return f"Not Suitable: {reason}"
+        return ""
+
+    def _build_summary(self, matched_skills: list[str], missing_skills: list[str], ats_score: int, domain_match: DomainMatch) -> str:
+        domain_label = humanize_domain(domain_match.domain)
+        if ats_score >= 80:
+            return f"Strong fit for this {domain_label} role with {len(matched_skills)} matched areas and an ATS score of {ats_score}."
+        if ats_score >= 60:
+            missing_list = ", ".join(display_phrase(s) for s in missing_skills[:3])
+            return f"Good fit for this {domain_label} role with {len(matched_skills)} matched areas; add evidence for {missing_list}."
+        missing_list = ", ".join(display_phrase(s) for s in missing_skills[:3])
+        return f"This profile does not yet align with the {domain_label} role; prioritize {missing_list}."
+
+    # ------------------------------------------------------------------
+    # Job description preparation (unchanged behavior)
+    # ------------------------------------------------------------------
 
     def _prepare_job_description(self, value: str) -> str:
         if not value:
@@ -371,160 +380,3 @@ class ATSService:
 
     def _looks_like_url(self, value: str) -> bool:
         return bool(re.match(r"^https?://", (value or "").strip(), re.I))
-
-    def _contains_skill(self, text: str, skill: str) -> bool:
-        pattern = re.escape(skill).replace(r"\ ", r"(?:\\s|\\-|\\/)+")
-        return bool(re.search(rf"(?<![a-z0-9]){pattern}(?![a-z0-9])", text))
-
-    def _looks_like_role_description(self, text: str) -> bool:
-        return bool(re.search(r"\b(developer|engineer|role|position|frontend|backend|full stack|fullstack|web|frontend|ui)\b", text))
-
-    def _split_skill_candidates(self, value: str) -> list[str]:
-        if not value:
-            return []
-        parts = re.split(r"[,;|/]+", str(value))
-        return [part.strip() for part in parts if part.strip()]
-
-    def _build_strengths(self, matched_skills: list[str], matched_keywords: list[str]) -> list[str]:
-        strengths: list[str] = []
-        if matched_skills:
-            strengths.append(f"Strong overlap with {', '.join(self._display_name(skill) for skill in matched_skills[:3])}.")
-        if matched_keywords:
-            strengths.append("The resume text overlaps with several job keywords.")
-        return strengths or ["The resume contains enough evidence to be evaluated."]
-
-    def _build_weaknesses(self, missing_skills: list[str], missing_keywords: list[str], parsed: dict[str, Any]) -> list[str]:
-        weaknesses: list[str] = []
-        if missing_skills:
-            weaknesses.append(f"Missing technologies: {', '.join(self._display_name(skill) for skill in missing_skills[:4])}.")
-        if missing_keywords:
-            weaknesses.append("Missing keyword coverage from the job description.")
-        if not parsed.get("projects"):
-            weaknesses.append("The resume does not include a strong project section.")
-        return weaknesses or ["No obvious weaknesses detected from the extracted content."]
-
-    def _build_recommendations(self, missing_skills: list[str]) -> list[str]:
-        recommendations: list[str] = []
-        for skill in missing_skills[:6]:
-            key = normalize_skill_name(skill).lower()
-            recommendations.append(self._advice_map.get(key, f"Practice {self._display_name(skill)} in a small project"))
-        return self._unique_items(recommendations)
-
-    def _build_learning_roadmap(self, missing_skills: list[str], parsed: dict[str, Any]) -> list[str]:
-        roadmap: list[str] = []
-        if not parsed.get("projects"):
-            roadmap.append("Add one portfolio project that demonstrates your strongest technical work.")
-        for skill in missing_skills[:4]:
-            roadmap.append(f"Practice {self._display_name(skill)} in a small hands-on project.")
-        return self._unique_items(roadmap)
-
-    def _build_recommended_jobs(self, matched_skills: list[str], missing_skills: list[str]) -> list[str]:
-        role_map = {
-            "python": ["Python Developer", "Backend Developer"],
-            "react": ["Frontend Developer", "React Developer"],
-            "java": ["Java Developer", "Backend Developer"],
-            "spring boot": ["Backend Developer", "Java Developer"],
-            "sql": ["Data Engineer", "Backend Developer"],
-            "aws": ["Cloud Engineer", "DevOps Engineer"],
-            "azure": ["Cloud Engineer", "DevOps Engineer"],
-            "docker": ["DevOps Engineer", "Platform Engineer"],
-            "machine learning": ["ML Engineer", "AI Engineer"],
-        }
-        roles: list[str] = []
-        for skill in [*matched_skills, *missing_skills]:
-            roles.extend(role_map.get(normalize_skill_name(skill).lower(), []))
-        return self._unique_items(roles)[:4] or ["Software Engineer", "Backend Developer"]
-
-    def _build_reason(self, matched_skills: list[str], missing_skills: list[str], missing_keywords: list[str], parsed: dict[str, Any], job_description: str) -> str:
-        if not matched_skills and missing_skills:
-            return f"The resume does not show the required technologies ({', '.join(self._display_name(skill) for skill in missing_skills[:6])}) and does not demonstrate the experience requested by the role."
-        if missing_keywords:
-            return f"The resume is missing several job keywords and the required technologies ({', '.join(self._display_name(skill) for skill in missing_skills[:4])})."
-        if not parsed.get("projects"):
-            return "The resume lacks project evidence that supports the role." 
-        return "The resume has a meaningful overlap with the role requirements."
-
-    def _build_warning(self, ats_score: int, status: str, reason: str) -> str:
-        if status == "Not Suitable" and ats_score < 40:
-            return f"Not Suitable: {reason}"
-        if status == "Not Suitable":
-            return f"Not Suitable: {reason}"
-        return ""
-
-    def _build_summary(self, matched_skills: list[str], missing_skills: list[str], ats_score: int) -> str:
-        if ats_score >= 80:
-            return f"Strong fit with {len(matched_skills)} matched skills and an ATS score of {ats_score}."
-        if ats_score >= 60:
-            return f"Good fit with {len(matched_skills)} matched skills; add evidence for {', '.join(self._display_name(skill) for skill in missing_skills[:3])}."
-        return f"This profile does not yet align with the role; prioritize {', '.join(self._display_name(skill) for skill in missing_skills[:3])}."
-
-    def _display_name(self, value: str) -> str:
-        normalized = normalize_skill_name(value)
-        display_map = {
-            "node.js": "Node.js",
-            "rest api": "REST API",
-            "ci/cd": "CI/CD",
-            "power bi": "Power BI",
-            "machine learning": "Machine Learning",
-            "spring boot": "Spring Boot",
-            "c++": "C++",
-            "c#": "C#",
-            "sql": "SQL",
-            "html": "HTML",
-            "css": "CSS",
-            "javascript": "JavaScript",
-            "python": "Python",
-            "java": "Java",
-            "react": "React",
-            "angular": "Angular",
-            "git": "Git",
-            "docker": "Docker",
-            "aws": "AWS",
-            "azure": "Azure",
-            "postgres": "PostgreSQL",
-            "mysql": "MySQL",
-            "mongodb": "MongoDB",
-            "fastapi": "FastAPI",
-            "django": "Django",
-            "flask": "Flask",
-            "kubernetes": "Kubernetes",
-            "terraform": "Terraform",
-            "devops": "DevOps",
-            "agile": "Agile",
-            "scrum": "Scrum",
-            "microservices": "Microservices",
-        }
-        return display_map.get(normalized.lower(), normalized.title())
-
-    def _safe_percent(self, part: int, total: int) -> float:
-        if total <= 0:
-            return 0.0
-        return round((part / total) * 100, 2)
-
-    def _extract_years(self, value: str) -> int | None:
-        matches = re.findall(r"(\d+)\s*(?:\+)?\s*(?:years?|yrs?|yr)", (value or "").lower())
-        if not matches:
-            return None
-        return int(matches[0])
-
-    def _intersect(self, left: list[str], right: list[str]) -> list[str]:
-        left_set = {item.lower() for item in left}
-        return [item for item in right if item.lower() in left_set]
-
-    def _difference(self, left: list[str], right: list[str]) -> list[str]:
-        right_set = {item.lower() for item in right}
-        return [item for item in left if item.lower() not in right_set]
-
-    def _unique_items(self, items: list[str]) -> list[str]:
-        unique: list[str] = []
-        seen: set[str] = set()
-        for item in items:
-            value = str(item).strip()
-            if not value:
-                continue
-            key = normalize_skill_name(value).lower()
-            if not key or key in seen:
-                continue
-            seen.add(key)
-            unique.append(normalize_skill_name(value))
-        return unique

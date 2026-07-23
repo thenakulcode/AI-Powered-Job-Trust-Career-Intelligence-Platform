@@ -1,6 +1,18 @@
 """FastAPI application entry point for fake job detection."""
 
 from __future__ import annotations
+from backend.routes.resume import router as resume_router   
+
+import asyncio
+import sys
+
+# Playwright's sync API spawns the browser as a subprocess, which requires
+# asyncio's ProactorEventLoop on Windows. Under uvicorn/threadpool contexts
+# the default policy can end up as SelectorEventLoop instead, which raises
+# NotImplementedError on subprocess creation. Force Proactor here, before
+# any other module gets a chance to create/cache an event loop.
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 from pathlib import Path
 
@@ -32,6 +44,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(resume_router)
 
 prediction_service = PredictionService()
 extraction_service = JobExtractionService()
@@ -123,6 +136,16 @@ def extract_job(payload: JobExtractionRequest) -> JobExtractionResponse:
             experience=result.experience,
             salary=result.salary,
             error=result.error,
+            skills=result.skills,
+            requirements=result.requirements,
+            benefits=result.benefits,
+            department=result.department,
+            industry=result.industry,
+            education=result.education,
+            posting_date=result.posting_date,
+            application_deadline=result.application_deadline,
+            source=result.source,
+            confidence=result.confidence,
         )
     except Exception as exc:  # pragma: no cover - defensive API guard.
         raise HTTPException(

@@ -55,3 +55,17 @@ class JobExtractionResponse(BaseModel):
     experience: str | None = None
     salary: str | None = None
     error: str | None = None
+
+    # Additive fields from the redesigned extraction engine. All default to
+    # empty/None so existing frontend code that only reads the fields above
+    # continues to work without any changes.
+    skills: List[str] = Field(default_factory=list)
+    requirements: List[str] = Field(default_factory=list)
+    benefits: List[str] = Field(default_factory=list)
+    department: str | None = None
+    industry: str | None = None
+    education: str | None = None
+    posting_date: str | None = None
+    application_deadline: str | None = None
+    source: str | None = Field(default=None, description="Which extraction strategy produced this result, e.g. 'microsoft_careers', 'json_ld', 'playwright+content_extraction'")
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)

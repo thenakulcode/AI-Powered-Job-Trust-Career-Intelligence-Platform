@@ -617,10 +617,18 @@ ul, ol, dl, dd { margin: 0; padding: 0; list-style: none; }
   mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
 }
 
-.logo-marquee__track {
-  display: flex;
-  width: max-content;
-  animation: logoMarqueeScroll 26s linear infinite;
+.logo-marquee__track{
+
+    display:flex;
+
+    align-items:center;
+
+    width:max-content;
+
+    will-change:transform;
+
+    animation:logoMarqueeScroll 20s linear infinite;
+
 }
 .logo-marquee__viewport:hover .logo-marquee__track { animation-play-state: paused; }
 
@@ -644,9 +652,16 @@ ul, ol, dl, dd { margin: 0; padding: 0; list-style: none; }
 }
 .logo-marquee__item:hover { opacity: 1; color: var(--text-on-image); }
 
-@keyframes logoMarqueeScroll {
-  from { transform: translateX(0); }
-  to { transform: translateX(-50%); }
+@keyframes logoMarqueeScroll{
+
+    from{
+        transform:translateX(0);
+    }
+
+    to{
+        transform:translateX(-50%);
+    }
+
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1877,4 +1892,18 @@ ul, ol, dl, dd { margin: 0; padding: 0; list-style: none; }
   .tab { flex: 1; justify-content: center; }
   .hero__actions { flex-direction: column; }
   .hero__actions .btn-gradient, .hero__actions .btn-ghost { width: 100%; }
+}
+.logo-marquee__track {
+    display: flex;
+    animation: testMove 5s linear infinite !important;
+}
+
+@keyframes testMove {
+    0% {
+        transform: translateX(0);
+    }
+
+    100% {
+        transform: translateX(-500px);
+    }
 }
